@@ -1,0 +1,14 @@
+setup.py
+sound2font/__init__.py
+sound2font/audiomodule.py
+sound2font/speech2text.py
+sound2font/textmodule.py
+sound2font.egg-info/PKG-INFO
+sound2font.egg-info/SOURCES.txt
+sound2font.egg-info/dependency_links.txt
+sound2font.egg-info/requires.txt
+sound2font.egg-info/top_level.txt
+tests/test_audio.py
+tests/test_pipeline.py
+tests/test_text.py
+tests/test_transcription.py

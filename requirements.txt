@@ -1,0 +1,4 @@
+vosk
+pyaudio
+wave
+git+https://github.com/Kalausel/recasepunc.git
