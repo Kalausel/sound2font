@@ -21,6 +21,7 @@ class GrammarAdder:
             else:
                 raise ValueError(f"Unknown case type {token_with_meta[1]}")
             output += punctuation_syms[punctuation[token_with_meta[2]]]
+            output = output.strip()
         return output.replace("##", "")
 
 class TextData:
