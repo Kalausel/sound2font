@@ -21,7 +21,7 @@ SPEAKER_DEFAULTS = {
 }
 
 class AudioData(bytearray):
-    def __init__(self, sample_width: int, max_var_size: int = 5e5, max_file_size: int = 1e7):
+    def __init__(self, sample_width: int, max_var_size: int = 5e7, max_file_size: int = 1e8):
         super().__init__()
         self.max_var_size = max_var_size
         self.max_file_size = max_file_size
@@ -31,7 +31,8 @@ class AudioData(bytearray):
     def load(cls, filename):
         with wave.open(filename, "rb") as wf:
             loaded = cls(sample_width=wf.getsampwidth())
-            loaded.extend(wf.readframes(wf.getnframes()))
+            for _ in range(wf.getnframes()):
+                loaded.extend(wf.readframes(1))
             return loaded
 
     def extend(self, in_data):
@@ -39,7 +40,7 @@ class AudioData(bytearray):
         super().extend(in_data)
 
     def check_size(self, data2):
-        new_size = len(self) + len(data2)  # Using len() instead of sys.getsizeof()
+        new_size = len(self) + len(data2)  # len(bytearray) is the actual size in bytes.
         if new_size > self.max_var_size:
             raise MemoryError(f"Maximum size of self.data would be exceeded.\n"
                               f"Max size: {self.max_var_size} Actual size: {new_size}\n"
@@ -54,7 +55,7 @@ class AudioData(bytearray):
             wf.writeframes(self)  # Directly write bytearray
 
     def as_bytes(self):
-        return bytes(self)  # Convert bytearray to immutable bytes
+        return bytes(self)  # Convert bytearray to immutable bytes object.
 
 class Speaker:
     def __init__(self, **kwargs):

@@ -13,11 +13,10 @@ CONVERTER_DE_MODEL_PATH = "/home/klaus/Documents/models/vosk/vosk-model-small-de
 GRAMMER_ADDER_EN_MODEL_PATH = "/home/klaus/Documents/models/vosk/vosk-recasepunc-en-0.22/checkpoint"
 GRAMMER_ADDER_DE_MODEL_PATH = "/home/klaus/Documents/models/vosk/vosk-recasepunc-de-0.21/checkpoint"
 
-audio_en = AudioData.load("test_data/audio_en.wav")
-audio_de = AudioData.load("test_data/audio_de.wav")
+audio_en = AudioData.load("/home/klaus/.local/lib/python3.12/site-packages/sound2font/tests/test_data/audio_en.wav")
+audio_de = AudioData.load("/home/klaus/.local/lib/python3.12/site-packages/sound2font/tests/test_data/audio_de.wav")
 
-@pytest.mark.parametrize(#"converter_model_path", "audio", "lang", "grammar_model_path"
-                        "converter_model_path, audio, lang, grammar_model_path"
+@pytest.mark.parametrize("converter_model_path, audio, lang, grammar_model_path"
                         , [(CONVERTER_EN_MODEL_PATH
                         , audio_en, "en"
                         , GRAMMER_ADDER_EN_MODEL_PATH)

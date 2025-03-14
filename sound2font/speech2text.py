@@ -10,7 +10,6 @@ class Speech2Text:
     def __init__(self, model_path: str, sample_rate: int
                  , model_type: str = "kaldi"):
         self.model_path = model_path
-        print(f"\n\n\nTHIS IS THE MODEL PATH\n\n{model_path}\n\n\n")
         self.sample_rate = sample_rate
         if model_type == "batch":
             model = BatchModel(model_path)
