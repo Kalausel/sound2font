@@ -14,6 +14,7 @@ setup(
         "vosk",
         "pyaudio",
         "wave",
+        "matplotlib",
         "recasepunc @ git+https://github.com/Kalausel/recasepunc.git"
     ],
     classifiers=[
