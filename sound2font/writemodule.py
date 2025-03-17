@@ -9,15 +9,17 @@ PEN = {
 
 DISCONNECTED_CHARS = [".", ",", "!", "-", "'", "?", ":", ";"]
 
-def get_coordinate(line: str, coord: str):
+def get_coordinate(line: str, coord: str, return_str: bool = False):
     if not coord in ["X", "Y"]:
         raise ValueError(f"Coordinate {coord} not recognised. Must be 'X' or 'Y'.")
     if coord not in line:
         return None
+    if return_str:
+        return line.split(coord)[1].split(" ")[0]
     return float(line.split(coord)[1].split(" ")[0])
 
 def replace_coordinate(line: str, coord: str, new_value: float):
-    old_value = get_coordinate(line, coord)
+    old_value = get_coordinate(line, coord, return_str=True)
     if old_value is None:
         return line
     return line.replace(f"{coord}{old_value}", f"{coord}{new_value}")
@@ -31,7 +33,7 @@ class GCode:
     def __init__(self, gcode: str):
         self.gcode = gcode
 
-    def show(self):
+    def show(self, subplot_size: tuple[float] = (6,6)):
         # This method plots the Gcode to a matplotlib plot.
         # TODO Arcs and curves
         pen_down = False
@@ -40,7 +42,8 @@ class GCode:
         for line in self.get_lines():
             if line == PEN["PAUSE"]:
                 no_pages += 1
-        _, axes = plt.subplots(no_pages // 2 + 1, 1 if no_pages == 1 else 2)
+        no_rows = no_pages // 2 + 1
+        _, axes = plt.subplots(no_rows, 1 if no_pages == 1 else 2, figsize=(no_pages*subplot_size[0], no_rows*subplot_size[1]))
         last_x, last_y = 0, 0
         if no_pages == 1:
             ax = axes
@@ -98,29 +101,14 @@ class GCode:
         # Remove double G0 commands
         # Remove double Pen up or Pen down commands
         unclean = self.get_lines()
-        rm_pens = []
-        rm_G0s = []
-        add_G0 = []
+        rm_ids = []
         for i, line in enumerate(unclean):
             if i == 0:
                 continue
             if line in remove_duplicates and unclean[i-1] == line:
-                rm_pens.append(i)
+                rm_ids.append(i)
             if collapse_G0 and line.startswith('G0') and unclean[i-1].startswith('G0'):
-                if i-1 in [x[0] for x in add_G0]:
-                    rm_G0s.append(i)
-                    add_x = get_coordinate(unclean[i], "X")
-                    add_y = get_coordinate(unclean[i], "Y")
-                    add_G0.append((i-1, add_x, add_y))
-                else:
-                    rm_G0s.append(i-1)
-                    add_x = get_coordinate(unclean[i-1], "X")
-                    add_y = get_coordinate(unclean[i-1], "Y")
-                    add_G0.append((i, add_x, add_y))
-        rm_ids = rm_pens + rm_G0s
-        for i, x, y in add_G0:
-            unclean[i] = replace_coordinate(unclean[i], "X", get_coordinate(unclean[i], "X") + x)
-            unclean[i] = replace_coordinate(unclean[i], "Y", get_coordinate(unclean[i], "Y") + y)
+                rm_ids.append(i-1)
         self.gcode = "\n".join([x for i, x in enumerate(unclean) if not i in rm_ids])
 
     def append(self, other: "GCode", inplace: bool = True):

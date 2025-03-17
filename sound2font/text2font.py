@@ -19,7 +19,7 @@ class Text2Font:
         self.font_size = font_size
         self.line_spacing = line_spacing
         if initial_position is None:
-            self.initial_position = (0, 0 + font_size) # Lower edge of first line
+            self.initial_position = (0, height - font_size) # Lower edge of first line
         else:
             self.initial_position = initial_position
         self.current_position = self.initial_position
@@ -34,19 +34,20 @@ class Text2Font:
         self.alphabet.resize(font_size)
         self.pen_down = False
 
-    def convert(self, text: str) -> GCode:
+    def convert(self, text: str, clean: bool = True) -> GCode:
         gcode = GCode("")
+        gcode.add_command(f"G0 X{self.current_position[0]} Y{self.current_position[1]}")
         paragraphs = text.split("\n")
         no_paragraphs = len(paragraphs)
         for i, paragraph in enumerate(paragraphs):
             if i != 0 or paragraph == "":
-                self.new_line() # Changes self.current_position and adds G0 move.
+                gcode.add_command(self.new_line()) # Changes self.current_position and adds G0 move.
             for word in paragraph.split(" "):
                 # Appends GCode
                 # Changes self.current_position
                 gcode.append(self.add_word(word))
             if i == no_paragraphs - 1 and paragraph == "":
-                self.new_line()
+                gcode.add_command(self.new_line())
         gcode.clean()
         return gcode
 
@@ -58,7 +59,7 @@ class Text2Font:
             pass
         else:
             self.gcode.add_command(self.new_line())
-            if self.current_position[1] > self.height:
+            if self.current_position[1] < 0:
                 # Adds gcode (pause) and G0 move, and sets self.current_position to 0,self.font_size
                 gcode.add_command(self.new_page())
         for char in word:
@@ -82,12 +83,12 @@ class Text2Font:
         return commandstr
 
     def new_line(self):
-        self.current_position = (0, self.current_position[1] + self.line_spacing)
+        self.current_position = (0, self.current_position[1] - self.line_spacing - self.font_size)
         self.pen_down = False
         return PEN["UP"] + f"\nG0 X0 Y{self.current_position[1]}"
 
     def new_page(self):
-        self.current_position = (0, self.font_size)
+        self.current_position = (0, self.height - self.font_size)
         self.pen_down = False
         return PEN['UP'] + f"\nG0 X0 Y{self.current_position[1]}\n" + PEN['PAUSE']
 
