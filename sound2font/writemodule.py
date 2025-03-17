@@ -7,6 +7,8 @@ PEN = {
     "PAUSE": "M7"
 }
 
+DISCONNECTED_CHARS = [".", ",", "!", "-", "'", "?", ":", ";"]
+
 def get_coordinate(line: str, coord: str):
     if not coord in ["X", "Y"]:
         raise ValueError(f"Coordinate {coord} not recognised. Must be 'X' or 'Y'.")
@@ -21,7 +23,7 @@ def replace_coordinate(line: str, coord: str, new_value: float):
     return line.replace(f"{coord}{old_value}", f"{coord}{new_value}")
 
 
-class GCode():
+class GCode:
     # This class stores Gcode commands.
     # I want the string to start with the command to go to the starting position.
     # Then pen down (or pen up, for that matter).
@@ -81,6 +83,42 @@ class GCode():
         else:
             return self.__class__(new_gcode)
     
+    def clean(self, remove_duplicates: list = [PEN["UP"], PEN["DOWN"], PEN["PAUSE"]]
+              , collapse_G0: bool = True):
+        # Remove double G0 commands
+        # Remove double Pen up or Pen down commands
+        unclean = self.get_lines()
+        rm_pens = []
+        rm_G0s = []
+        add_G0 = []
+        for i, line in enumerate(unclean):
+            if i == 0:
+                continue
+            if line in remove_duplicates and unclean[i-1] == line:
+                rm_pens.append(i)
+            if collapse_G0 and line.startswith('G0') and unclean[i-1].startswith('G0'):
+                if i-1 in [x[0] for x in add_G0]:
+                    rm_G0s.append(i)
+                    add_x = get_coordinate(unclean[i], "X")
+                    add_y = get_coordinate(unclean[i], "Y")
+                    add_G0.append((i-1, add_x, add_y))
+                else:
+                    rm_G0s.append(i-1)
+                    add_x = get_coordinate(unclean[i-1], "X")
+                    add_y = get_coordinate(unclean[i-1], "Y")
+                    add_G0.append((i, add_x, add_y))
+        rm_ids = rm_pens + rm_G0s
+        for i, x, y in add_G0:
+            unclean[i] = replace_coordinate(unclean[i], "X", get_coordinate(unclean[i], "X") + x)
+            unclean[i] = replace_coordinate(unclean[i], "Y", get_coordinate(unclean[i], "Y") + y)
+        self.gcode = "\n".join([x for i, x in enumerate(unclean) if not i in rm_ids])
+
+    def append(self, other: "GCode", inplace: bool = True):
+        if inplace:
+            self.gode += "\n" + other.gcode
+        else:
+            return self.__class__(self.gcode + "\n" + other.gcode)
+
     def get_lines(self):
         return self.gcode.split("\n")
     
@@ -102,6 +140,7 @@ class Character:
 
     def __init__(self, gcode: GCode, width: float = None):
         self.gcode = gcode
+        self.gcode.gcode = gcode.gcode.replace("PENUP", PEN["UP"]).replace("PENDOWN", PEN["DOWN"])
         if width is None:
             self.width = self.calculate_width()
         else:
@@ -121,7 +160,6 @@ class Character:
         if y is None:
             y = 0
         return (x, y)
-
 
     def calculate_width(self):
         old_x = 0
@@ -157,73 +195,3 @@ class Alphabet:
     def load(cls, path: str):
         with open(path, "r") as f:
             return cls(json.load(f))
-
-class Page:
-    # Origin at top left
-
-    def __init__(self, width: float, height: float
-                 , font_path: str, space_between_chars: bool
-                 , font_size: float, line_spacing: float
-                 , char_spacing: float = 0
-                 , initial_position: tuple[float, float] = None
-                 #, trailing_char_spacing: bool = False
-    ):
-        self.width = width
-        self.height = height
-        self.font_size = font_size
-        self.line_spacing = line_spacing
-        if initial_position is None:
-            self.initial_position = (0, 0 + font_size) # Lower edge of first line
-        else:
-            self.initial_position = initial_position
-        self.current_position = initial_position
-        self.char_spacing = char_spacing
-        self.font_size = font_size
-        self.font_path = font_path
-        self.space_between_chars = space_between_chars
-        self.alphabet = Alphabet.load(font_path)
-        self.alphabet.resize(font_size)
-        self.pen_down = False
-
-    def add_word(self, word: str) -> str:
-        gcode = GCode("")
-        required_space = sum([self.alphabet[char].width + self.char_spacing for char in word])
-        available_space = self.width - self.current_position[0]
-        if available_space >= required_space:
-            pass
-        else:
-            self.new_line()
-            if self.current_position[1] > self.height:
-                gcode.add_command(self.new_page())
-        for char in word:
-            if not self.pen_down:
-                gcode.add_command(PEN["DOWN"])
-            gcode.add_command(self.gcode_and_move_cursor(char))
-        return gcode
-    
-    def gcode_and_move_cursor(self, char: str) -> str:
-        # TODO Handle trailing space at the end of a word.
-        commandstr = self.alphabet[char].gcode.translate(self.current_position).gcode
-        self.current_position = (self.current_position[0] + self.alphabet[char].final_position[0],
-                                 self.current_position[1] + self.alphabet[char].final_position[1])
-        if self.space_between_chars:
-            gcode += "\n" + (PEN["UP"])
-            gcode += "\n" + (f"G0 X{self.current_position[0] + self.char_spacing}")
-            self.current_position = (self.current_position[0] + self.char_spacing, self.current_position[1])
-        return commandstr
-
-    def new_line(self):
-        self.current_position = (0, self.current_position[1] + self.line_spacing)
-
-    def new_page(self):
-        self.current_position = (0,0)
-        return "\n" + PEN['PAUSE']
-
-    def save(self, path: str):
-        with open(path, "w") as f:
-            json.dump(self.__dict__, f)
-    
-    def load(cls, path: str):
-        with open(path, "r") as f:
-            return cls(**json.load(f))
-        
