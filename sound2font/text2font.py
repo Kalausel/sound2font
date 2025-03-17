@@ -58,7 +58,7 @@ class Text2Font:
         if available_space >= required_space:
             pass
         else:
-            self.gcode.add_command(self.new_line())
+            gcode.add_command(self.new_line())
             if self.current_position[1] < 0:
                 # Adds gcode (pause) and G0 move, and sets self.current_position to 0,self.font_size
                 gcode.add_command(self.new_page())
@@ -70,9 +70,16 @@ class Text2Font:
     def gcode_and_move_cursor(self, char: str) -> str:
         # TODO Handle trailing space at the end of a word.
         next_char_pos = (self.current_position[0] + self.alphabet.symbols[char].width + self.char_spacing, self.current_position[1])
+        if next_char_pos[0] - self.char_spacing > self.width: # Split up the word if it is longer than a whole line.
+            commandstr = self.new_line() + "\n"
+            if self.current_position[1] < 0:
+                commandstr += self.new_page() + "\n"
+            next_char_pos = (self.current_position[0] + self.alphabet.symbols[char].width + self.char_spacing, self.current_position[1])
+        else:
+            commandstr = ""
         # If not self.gap_between_chars, next_char_pos == char.final_position.
         # If this is not the case, the code will work, but the first line of the next char will be wrong.
-        commandstr = self.alphabet.symbols[char].gcode.translate(self.current_position).gcode
+        commandstr += self.alphabet.symbols[char].gcode.translate(self.current_position).gcode
         self.current_position = next_char_pos
         if self.gap_between_chars or char in DISCONNECTED_CHARS:
             commandstr = PEN['UP'] + "\n" + commandstr

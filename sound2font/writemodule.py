@@ -42,7 +42,8 @@ class GCode:
         for line in self.get_lines():
             if line == PEN["PAUSE"]:
                 no_pages += 1
-        no_rows = no_pages // 2 + 1
+            print(f"{no_pages = }")
+        no_rows = (no_pages + 1) // 2
         _, axes = plt.subplots(no_rows, 1 if no_pages == 1 else 2, figsize=(no_pages*subplot_size[0], no_rows*subplot_size[1]))
         last_x, last_y = 0, 0
         if no_pages == 1:
@@ -109,6 +110,10 @@ class GCode:
                 rm_ids.append(i)
             if collapse_G0 and line.startswith('G0') and unclean[i-1].startswith('G0'):
                 rm_ids.append(i-1)
+            if i >= 2 and line == PEN["PAUSE"]:
+                 if unclean[i-1].startswith('G0') and unclean[i-2] == PEN["UP"] and unclean[i-3].startswith('G0') and unclean[i-4] == PEN["UP"]:
+                     rm_ids.append(i-3)
+                     rm_ids.append(i-4)
         self.gcode = "\n".join([x for i, x in enumerate(unclean) if not i in rm_ids])
 
     def append(self, other: "GCode", inplace: bool = True):
