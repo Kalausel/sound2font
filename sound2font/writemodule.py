@@ -22,7 +22,6 @@ def replace_coordinate(line: str, coord: str, new_value: float):
         return line
     return line.replace(f"{coord}{old_value}", f"{coord}{new_value}")
 
-
 class GCode:
     # This class stores Gcode commands.
     # I want the string to start with the command to go to the starting position.
@@ -43,7 +42,12 @@ class GCode:
                 no_pages += 1
         _, axes = plt.subplots(no_pages // 2 + 1, 1 if no_pages == 1 else 2)
         last_x, last_y = 0, 0
-        ax = axes[0]
+        if no_pages == 1:
+            ax = axes
+        elif no_pages <= 2:
+            ax = axes[0]
+        else:
+            ax = axes[0][0]
         page = 1
         for line in self.get_lines():
             if line == PEN["UP"]:
@@ -54,16 +58,21 @@ class GCode:
                 style = "--" if line.startswith("G0") else "-"
                 col = "b" if pen_down else "r"
                 x = get_coordinate(line, "X")
-                if "X" is None:
+                if x is None:
                     x = last_x
                 y = get_coordinate(line, "Y")
-                if "Y" is None:
+                if y is None:
                     y = last_y
                 ax.plot([last_x, x], [last_y, y], f"{col}{style}")
                 last_x, last_y = x, y
             elif line == PEN['PAUSE']:
-                ax = axes[page]
+                if no_pages <= 2:
+                    ax = axes[1]
+                else:
+                    ax = axes[page//2][page % 2]
                 page += 1
+            elif line == '\n':
+                pass
             else:
                 print(f"Warning: Unknown Gcode command {line}")
         plt.show()
@@ -75,7 +84,8 @@ class GCode:
             if line.startswith("G1") or line.startswith("G0"):
                 old_x = get_coordinate(line, "X")
                 old_y = get_coordinate(line, "Y")
-                new_gcode += replace_coordinate(replace_coordinate(line, "X", old_x+x), "Y", old_y+y) + "\n"
+                new_gcode += replace_coordinate(replace_coordinate(
+                    line, "X", old_x+x if old_x is not None else "dummy"), "Y", old_y+y if old_y is not None else "dummy") + "\n"
             else:
                 new_gcode += line + "\n"
         if inplace:
@@ -115,7 +125,7 @@ class GCode:
 
     def append(self, other: "GCode", inplace: bool = True):
         if inplace:
-            self.gode += "\n" + other.gcode
+            self.gcode += "\n" + other.gcode
         else:
             return self.__class__(self.gcode + "\n" + other.gcode)
 
@@ -150,7 +160,7 @@ class Character:
     def find_final_position(self):
         x = None
         y = None
-        for line in self.gcode.get_lines().reversed():
+        for line in reversed(self.gcode.get_lines()):
             if x is None:
                 x = get_coordinate(line, "X")
             if y is None:
@@ -174,24 +184,35 @@ class Character:
         for line in self.gcode.get_lines():
             x = get_coordinate(line, "X")
             y = get_coordinate(line, "Y")
-            new_gcode.add_command(replace_coordinate(replace_coordinate(line, "X", x*factor), "Y", y*factor))
+            new_gcode.add_command(replace_coordinate(
+                replace_coordinate(line, "X", x*factor if x is not None else "dummy")
+                , "Y", y*factor if y is not None else "dummy"))
         self.gcode = new_gcode
         self.width *= factor
         self.final_position = self.find_final_position()
 
 class Alphabet:
     
-    def __init__(self, alphabet: dict[Character]):
-        # self.alphabet = {'a': Character, 'b': Character ... '.': Character .... 'Z': Character}
-        self.alphabet = alphabet
+    def __init__(self, symbols: dict[Character]):
+        # self.symbols = {'a': Character, 'b': Character ... '.': Character .... 'Z': Character}
+        self.symbols = symbols
     
     def resize(self, factor: float):
-        self.alphabet = {key: self.alphabet[key].resize(factor) for key in self.alphabet}
+        for key in self.symbols:
+            self.symbols[key].resize(factor)
+        #self.symbols = {key: self.symbols[key].resize(factor) for key in self.symbols}
 
     def save(self, path: str):
         with open(path, "w") as f:
-            json.dump(self.alphabet, f)
+            json.dump(self.symbols, f)
     
+    @classmethod
     def load(cls, path: str):
         with open(path, "r") as f:
             return cls(json.load(f))
+    
+    @classmethod
+    def load_from_string_dict(cls, path: str):
+        with open(path, "r") as f:
+            str_dict = json.load(f)
+        return cls({key: Character(GCode(string)) for key, string in str_dict.items()})

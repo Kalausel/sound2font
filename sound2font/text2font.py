@@ -4,15 +4,6 @@ import json
 from sound2font.writemodule import Alphabet, GCode, PEN, DISCONNECTED_CHARS
 
 class Text2Font:
-
-    def __init__(self, font_path):
-        self.font_path = font_path
-        with open(font_path, "r") as f:
-            self.alphabet = json.load(f)
-
-    
-
-class Text2Font:
     # Origin at top left
 
     def __init__(self, width: float, height: float
@@ -20,6 +11,7 @@ class Text2Font:
                  , font_size: float, line_spacing: float
                  , char_spacing: float = 0
                  , initial_position: tuple[float, float] = None
+                 , string_alphabet: bool = False
                  #, trailing_char_spacing: bool = False
     ):
         self.width = width
@@ -30,12 +22,15 @@ class Text2Font:
             self.initial_position = (0, 0 + font_size) # Lower edge of first line
         else:
             self.initial_position = initial_position
-        self.current_position = initial_position
+        self.current_position = self.initial_position
         self.char_spacing = char_spacing
         self.font_size = font_size
         self.font_path = font_path
         self.gap_between_chars = gap_between_chars
-        self.alphabet = Alphabet.load(font_path)
+        if string_alphabet:
+            self.alphabet = Alphabet.load_from_string_dict(font_path)
+        else:
+            self.alphabet = Alphabet.load(font_path)
         self.alphabet.resize(font_size)
         self.pen_down = False
 
@@ -57,7 +52,7 @@ class Text2Font:
 
     def add_word(self, word: str) -> str:
         gcode = GCode("")
-        required_space = sum([self.alphabet[char].width + self.char_spacing for char in word])
+        required_space = sum([self.alphabet.symbols[char].width + self.char_spacing for char in word])
         available_space = self.width - self.current_position[0]
         if available_space >= required_space:
             pass
@@ -73,16 +68,16 @@ class Text2Font:
     
     def gcode_and_move_cursor(self, char: str) -> str:
         # TODO Handle trailing space at the end of a word.
-        next_char_pos = (self.current_position[0] + self.alphabet[char].width + self.char_spacing, self.current_position[1])
+        next_char_pos = (self.current_position[0] + self.alphabet.symbols[char].width + self.char_spacing, self.current_position[1])
         # If not self.gap_between_chars, next_char_pos == char.final_position.
         # If this is not the case, the code will work, but the first line of the next char will be wrong.
-        commandstr = self.alphabet[char].gcode.translate(self.current_position).gcode
+        commandstr = self.alphabet.symbols[char].gcode.translate(self.current_position).gcode
         self.current_position = next_char_pos
         if self.gap_between_chars or char in DISCONNECTED_CHARS:
             commandstr = PEN['UP'] + "\n" + commandstr
             commandstr += "\n" + (PEN["UP"])
             self.pen_down = False
-            gcode += "\n" + (f"G0 X{next_char_pos[0]} Y{next_char_pos[1]}")
+            commandstr += "\n" + (f"G0 X{next_char_pos[0]} Y{next_char_pos[1]}")
             self.current_position = next_char_pos
         return commandstr
 
