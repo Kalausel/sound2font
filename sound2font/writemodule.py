@@ -1,11 +1,12 @@
+from warnings import warn
 import json
 from matplotlib.patches import Arc
 from matplotlib import pyplot as plt
 import numpy as np
 
 PEN = {
-    "UP": "M5",
-    "DOWN": "M3",
+    "UP": "G0 Z1",
+    "DOWN": "G0 Z0",
     "PAUSE": "M7"
 }
 
@@ -50,8 +51,8 @@ class GCode:
     # Then pen down (or pen up, for that matter).
     # Every z movement and every x-y movement should be a separate line.
     
-    def __init__(self, gcode: str):
-        self.gcode = gcode
+    def __init__(self, commandstr: str):
+        self.commandstr = commandstr
 
     def show(self, subplot_size: tuple[float] = (6,6)):
         # This method plots the Gcode to a matplotlib plot.
@@ -120,21 +121,21 @@ class GCode:
         plt.show()
 
     def translate(self, vector: tuple[float], inplace: bool = False) -> None:
-        new_gcode = ""
-        for line in self.gcode.split("\n"):
+        new_commandstr = ""
+        for line in self.commandstr.split("\n"):
             if line[0:2] in ["G0", "G1", "G2", "G3"]:
                 new_line = line
                 for coord in ["X", "Y", "I", "J"]:
                     old = get_coordinate(line, coord)
                     i = 0 if coord in ["X", "I"] else 1
                     new_line = replace_coordinate(new_line, coord, old + vector[i] if old is not None else "dummy")
-                new_gcode += new_line + "\n"
+                new_commandstr += new_line + "\n"
             else:
-                new_gcode += line + "\n"
+                new_commandstr += line + "\n"
         if inplace:
-            self.gcode = new_gcode
+            self.commandstr = new_commandstr
         else:
-            return self.__class__(new_gcode)
+            return self.__class__(new_commandstr)
     
     def clean(self):
         # Comment instead of remove.
@@ -160,7 +161,7 @@ class GCode:
                 last_line = line
                 last_idx = 0
                 continue
-            if line.startswith("#") or line == "":
+            if line.startswith("#") or line == "" or line in [PEN["DOWN"], PEN["UP"]]:
                 continue
             if line.startswith('G0') and last_line.startswith('G0'):
                 last_x, last_y = get_coordinate(last_line, "X"), get_coordinate(last_line, "Y")
@@ -188,26 +189,29 @@ class GCode:
             idx, coord, value = tup
             if not commented[idx].startswith("#"):
                 commented[idx] = add_coord(commented[idx], coord, value)
-        self.gcode = "\n".join(x for x in commented)
+        self.commandstr = "\n".join(x for x in commented)
         
 
     def append(self, other: "GCode", inplace: bool = True):
         if inplace:
-            self.gcode += "\n" + other.gcode
+            self.commandstr += "\n" + other.commandstr
         else:
-            return self.__class__(self.gcode + "\n" + other.gcode)
+            return self.__class__(self.commandstr + "\n" + other.commandstr)
 
     def get_lines(self):
-        return self.gcode.split("\n")
+        return self.commandstr.split("\n")
     
     def add_command(self, command: str, comment: str = None):
         if comment is not None:
-            self.gcode += "\n# " + comment
-        self.gcode += "\n" + command
+            if command in [PEN["DOWN"], PEN["UP"]]:
+                warn(f"Did not add comment because command is {command}. This comment could interfere in GCode.clean().")
+            else:
+                self.commandstr += "\n# " + comment
+        self.commandstr += "\n" + command
 
     def save(self, path: str):
         with open(path, "w") as f:
-            f.write(self.gcode)
+            f.write(self.commandstr)
     
     def load(cls, path: str):
         with open(path, "r") as f:
@@ -220,7 +224,7 @@ class Character:
 
     def __init__(self, gcode: GCode, width: float = None):
         self.gcode = gcode
-        self.gcode.gcode = gcode.gcode.replace("PENUP", PEN["UP"]).replace("PENDOWN", PEN["DOWN"])
+        self.gcode.commandstr = gcode.commandstr.replace("PENUP", PEN["UP"]).replace("PENDOWN", PEN["DOWN"])
         if width is None:
             self.width = self.calculate_width()
         else:
