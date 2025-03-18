@@ -129,6 +129,9 @@ class Text2Font:
         self.pen_down = False
         return PEN['UP'] + f"\nG0 X0 Y{self.current_position[1]}\n" + PEN['PAUSE']
 
+    def reset_cursor(self):
+        self.current_position = (0, self.height - self.font_size)
+
     def save(self, path: str):
         with open(path, "w") as f:
             json.dump(self.__dict__, f)

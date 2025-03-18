@@ -254,11 +254,11 @@ class Character:
     def resize(self, factor):
         new_gcode = GCode("")
         for line in self.gcode.get_lines():
-            x = get_coordinate(line, "X")
-            y = get_coordinate(line, "Y")
-            new_gcode.add_command(replace_coordinate(
-                replace_coordinate(line, "X", x*factor if x is not None else "dummy")
-                , "Y", y*factor if y is not None else "dummy"))
+            new_line = line
+            for coord in ["X", "Y", "I", "J"]:
+                old = get_coordinate(line, coord)
+                new_line = replace_coordinate(new_line, coord, old*factor if old is not None else "dummy")
+            new_gcode.add_command(new_line)
         self.gcode = new_gcode
         self.width *= factor
         self.final_position = self.find_final_position()
