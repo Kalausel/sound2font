@@ -150,7 +150,6 @@ class GCode:
                     if pen_down and line == PEN["DOWN"] or not pen_down and line == PEN["UP"]:
                         rm_ids.append(i)
                 pen_down = True if line == PEN["DOWN"] else False
-        #semiclean = [x for i, x in enumerate(unclean) if not i in rm_ids]
         semiclean = [x if not i in rm_ids else "# " + x + " CLEANED" for i, x in enumerate(unclean)]
         rm_ids = []
         add_coords = []
@@ -184,7 +183,6 @@ class GCode:
                 carry_y = None
             last_line = line
             last_idx = i
-        #self.gcode = "\n".join([x for i, x in enumerate(semiclean) if not i in rm_ids])
         commented = [x if not i in rm_ids else "# " + x + " CLEANED" for i, x in enumerate(semiclean)]
         for tup in add_coords:
             idx, coord, value = tup
@@ -272,7 +270,6 @@ class Alphabet:
     def resize(self, factor: float):
         for key in self.symbols:
             self.symbols[key].resize(factor)
-        #self.symbols = {key: self.symbols[key].resize(factor) for key in self.symbols}
 
     def save(self, path: str):
         with open(path, "w") as f:

@@ -13,7 +13,6 @@ class Text2Font:
                  , space_ratio: float = 0.4
                  , initial_position: tuple[float, float] = None
                  , string_alphabet: bool = False
-                 #, trailing_char_spacing: bool = False
     ):
         self.width = width
         self.height = height
@@ -38,16 +37,18 @@ class Text2Font:
         self.pen_down = False
 
     def convert(self, text: str, clean: bool = True) -> GCode:
+        """
+        Do not pass strings like " ", "\n", "\n\n" to this method.
+        Use Text2font.newline() instead.
+        Do not add spaces manually.
+        """
         gcode = GCode(PEN["UP"]) # Make sure that the pen is up at the start.
         gcode.add_command(f"G0 X{self.current_position[0]} Y{self.current_position[1]}", comment="Move to initial position")
-        #paragraphs = text.split("\n")
-        #no_paragraphs = len(paragraphs)
-        #for i, paragraph in enumerate(paragraphs):
         for i, paragraph in enumerate(text.split("\n")):
             if paragraph == "":
-                gcode.add_command(self.new_line(), comment="New line because start of explicit newline character")
+                gcode.add_command(self.new_line().gcode, comment="New line because start of explicit newline character")
             if i != 0:
-                gcode.add_command(self.new_line(), comment="New line because start of new paragraph") # Changes self.current_position and adds G0 move.
+                gcode.add_command(self.new_line().gcode, comment="New line because start of new paragraph") # Changes self.current_position and adds G0 move.
             for j, word in enumerate(paragraph.split(" ")):
                 # Add a space before every word.
                 # If the paragraph starts with a space, or ends with a space, this is caught by word == "".
@@ -57,17 +58,19 @@ class Text2Font:
                 if j != 0 or word == "":
                     self.current_position = (self.current_position[0] + self.space_width,
                                              self.current_position[1])
-                    gcode.add_command(f"G0 X{self.current_position[0]} Y{self.current_position[1]}"
-                                      , comment="Space before word" if j!=0 else "Space due to explicit space character")
+                    gcode.add_command(self.add_space().gcode, comment="Space before word" if j!=0 else "Space due to explicit space character")
                 # Appends GCode until the end of the last character. This may be different from self.current_position!
                 # Changes self.current_position to the beginning of the non-existing next character, i.e. the beginning of the "space" character.
                 gcode.append(self.add_word(word, first_word=(j==0)))
-            # The below two lines seem like they should not be here.
-            # if i == no_paragraphs - 1 and paragraph == "":
-            #     gcode.add_command(self.new_line())
+        # Add a space at the end. I know no case, where this is not needed or irrelevant.
+        gcode.add_command(self.add_space().gcode, comment="Space at the end of Text2Font.convert()")
         if clean:
             gcode.clean()
         return gcode
+    
+    def add_space(self, comment: str = None):
+        self.current_position = (self.current_position[0] + self.space_width, self.current_position[1])
+        return GCode(f"G0 X{self.current_position[0]} Y{self.current_position[1]}")
 
     def add_word(self, word: str, first_word: bool = False) -> GCode:
         # 1) Check whether to start a new line.
@@ -82,15 +85,14 @@ class Text2Font:
         if available_space >= required_space or first_word:
             pass
         else:
-            gcode.add_command(self.new_line(), comment="New line because line has not enough space left for next word")
+            gcode.add_command(self.new_line().gcode, comment="New line because line has not enough space left for next word")
             if self.current_position[1] < 0:
                 # Adds gcode (pause) and G0 move, and sets self.current_position to 0,self.font_size
-                gcode.add_command(self.new_page(), comment="New page because next line would exeed y-limit")
+                gcode.add_command(self.new_page().gcode, comment="New page because next line would exeed y-limit")
         for char in word:
             # Adds GCode and changes current position both until beginning of new char.
             # In the case of connected fonts, this is the end of the current char.
             gcode.add_command(self.gcode_and_move_cursor(char), comment=f"Char {char}")
-        #gcode.add_command(f"G0 X{self.current_position[0] + self.space_width}")
         return gcode
     
     def gcode_and_move_cursor(self, char: str) -> str:
@@ -98,9 +100,9 @@ class Text2Font:
         next_char_pos = (self.current_position[0] + self.alphabet.symbols[char].width + self.char_spacing, self.current_position[1])
         # Split up the word if it is longer than a whole line.
         if next_char_pos[0] - self.char_spacing > self.width:
-            commandstr = "# New line within word because the character does not have enough space left\n" + self.new_line() + "\n"
+            commandstr = "# New line within word because the character does not have enough space left\n" + self.new_line().gcode + "\n"
             if self.current_position[1] < 0:
-                commandstr += "# New page within word because the character does not have enough space left\n" + self.new_page() + "\n"
+                commandstr += "# New page within word because the character does not have enough space left\n" + self.new_page().gcode + "\n"
             next_char_pos = (self.current_position[0] + self.alphabet.symbols[char].width + self.char_spacing, self.current_position[1])
         else:
             commandstr = ""
@@ -122,12 +124,12 @@ class Text2Font:
     def new_line(self):
         self.current_position = (0, self.current_position[1] - self.line_spacing - self.font_size)
         self.pen_down = False
-        return PEN["UP"] + f"\nG0 X0 Y{self.current_position[1]}"
+        return GCode(PEN["UP"] + f"\nG0 X0 Y{self.current_position[1]}")
 
     def new_page(self):
         self.current_position = (0, self.height - self.font_size)
         self.pen_down = False
-        return PEN['UP'] + f"\nG0 X0 Y{self.current_position[1]}\n" + PEN['PAUSE']
+        return GCode(PEN['UP'] + f"\nG0 X0 Y{self.current_position[1]}\n" + PEN['PAUSE'])
 
     def reset_cursor(self):
         self.current_position = (0, self.height - self.font_size)
