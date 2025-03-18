@@ -26,6 +26,24 @@ def replace_coordinate(line: str, coord: str, new_value: float):
         return line
     return line.replace(f"{coord}{old_value}", f"{coord}{new_value}")
 
+def add_coord(line: str, coord: str, value: float) -> str:
+    # Check that coordinate does not exist.
+    if get_coordinate(line, coord) is not None:
+        raise ValueError(f"add_coord: Coordinate {coord} already exists in line \"{line}\"")
+    if coord == "X":
+        # Insert x into the line.
+        return line.split("Y")[0] + f"X{value} Y" + line.split("Y")[1]
+    elif coord == "Y":
+        # Insert y into the line.
+        # Find first space after X
+        space_idx = line.find(" ", line.find("X"))
+        if space_idx == -1:
+            space_idx = len(line)
+        return line[:space_idx] + f" Y{value}" + line[space_idx:]
+    else:
+        raise ValueError(f"add_coord: coord must be \"X\" or \"Y\". Received {coord}.")
+
+
 class GCode:
     # This class stores Gcode commands.
     # I want the string to start with the command to go to the starting position.
@@ -119,8 +137,10 @@ class GCode:
             return self.__class__(new_gcode)
     
     def clean(self):
+        # Comment instead of remove.
         # 1) Remove PENUP if already up and PENDOWN if already down.
         # 2) Remove successive G0 commands. Ignore comments and empty lines.
+        #    Carry coordinates, if not explicitly specified in the new line.
         unclean = self.get_lines()
         rm_ids = []
         pen_down = None
@@ -130,20 +150,48 @@ class GCode:
                     if pen_down and line == PEN["DOWN"] or not pen_down and line == PEN["UP"]:
                         rm_ids.append(i)
                 pen_down = True if line == PEN["DOWN"] else False
-        semiclean = [x for i, x in enumerate(unclean) if not i in rm_ids]
+        #semiclean = [x for i, x in enumerate(unclean) if not i in rm_ids]
+        semiclean = [x if not i in rm_ids else "# " + x + " CLEANED" for i, x in enumerate(unclean)]
         rm_ids = []
+        add_coords = []
+        carry_x = None
+        carry_y = None
         for i, line in enumerate(semiclean):
             if i == 0:
                 last_line = line
-                last_idx = i
+                last_idx = 0
                 continue
             if line.startswith("#") or line == "":
                 continue
             if line.startswith('G0') and last_line.startswith('G0'):
+                last_x, last_y = get_coordinate(last_line, "X"), get_coordinate(last_line, "Y")
+                new_x, new_y = get_coordinate(line, "X"), get_coordinate(line, "Y")
+                if new_x is None:
+                    if last_x is not None:
+                        carry_x = last_x
+                        add_coords.append((i, "X", last_x))
+                    elif carry_x is not None:
+                        add_coords.append((i, "X", carry_x))
+                if new_y is None:
+                    if last_y is not None:
+                        carry_y = last_y
+                        add_coords.append((i, "Y", last_y))
+                    elif carry_y is not None:
+                        add_coords.append((i, "Y", carry_y))
                 rm_ids.append(last_idx)
+            if not line.startswith('G0') and last_line.startswith('G0'):
+                carry_x = None
+                carry_y = None
             last_line = line
             last_idx = i
-        self.gcode = "\n".join([x for i, x in enumerate(semiclean) if not i in rm_ids])
+        #self.gcode = "\n".join([x for i, x in enumerate(semiclean) if not i in rm_ids])
+        commented = [x if not i in rm_ids else "# " + x + " CLEANED" for i, x in enumerate(semiclean)]
+        for tup in add_coords:
+            idx, coord, value = tup
+            if not commented[idx].startswith("#"):
+                commented[idx] = add_coord(commented[idx], coord, value)
+        self.gcode = "\n".join(x for x in commented)
+        
 
     def append(self, other: "GCode", inplace: bool = True):
         if inplace:

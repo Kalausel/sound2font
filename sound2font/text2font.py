@@ -23,6 +23,7 @@ class Text2Font:
             self.initial_position = (0, height - font_size) # Lower edge of first line
         else:
             self.initial_position = initial_position
+        # self.current_position is changes in Y only integer lines.
         self.current_position = self.initial_position
         self.char_spacing = char_spacing
         self.font_size = font_size
@@ -86,9 +87,9 @@ class Text2Font:
                 # Adds gcode (pause) and G0 move, and sets self.current_position to 0,self.font_size
                 gcode.add_command(self.new_page(), comment="New page because next line would exeed y-limit")
         for char in word:
-            # Adds GCode and changes current position until beginning of new char.
+            # Adds GCode and changes current position both until beginning of new char.
             # In the case of connected fonts, this is the end of the current char.
-            gcode.add_command(self.gcode_and_move_cursor(char), comment=f"{char}")
+            gcode.add_command(self.gcode_and_move_cursor(char), comment=f"Char {char}")
         #gcode.add_command(f"G0 X{self.current_position[0] + self.space_width}")
         return gcode
     
@@ -109,13 +110,13 @@ class Text2Font:
         # 2) Add the gcode command string
         commandstr += self.alphabet.symbols[char].gcode.translate(self.current_position).gcode
         if self.gap_between_chars or char in DISCONNECTED_CHARS:
-            # 3) Add G0 movement to the next character's starting position.
+            # 3) Add G0 movement to the next character's starting position. Only if disconnected.
             commandstr = PEN['UP'] + "\n" + commandstr
             commandstr += "\n" + (PEN["UP"])
             self.pen_down = False
             commandstr += "\n" + (f"G0 X{next_char_pos[0]} Y{next_char_pos[1]}")
-            # 4) Set current position to the previously calculated next character's starting position.
-            self.current_position = next_char_pos
+        # 4) Set current position to the previously calculated next character's starting position (bottom).
+        self.current_position = next_char_pos
         return commandstr
 
     def new_line(self):
