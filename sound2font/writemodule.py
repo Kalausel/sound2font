@@ -1,5 +1,7 @@
 import json
+from matplotlib.patches import Arc
 from matplotlib import pyplot as plt
+import numpy as np
 
 PEN = {
     "UP": "M5",
@@ -10,7 +12,7 @@ PEN = {
 DISCONNECTED_CHARS = [".", ",", "!", "-", "'", "?", ":", ";"]
 
 def get_coordinate(line: str, coord: str, return_str: bool = False):
-    if not coord in ["X", "Y"]:
+    if not coord in ["X", "Y", "I", "J"]:
         raise ValueError(f"Coordinate {coord} not recognised. Must be 'X' or 'Y'.")
     if coord not in line:
         return None
@@ -42,7 +44,6 @@ class GCode:
         for line in self.get_lines():
             if line == PEN["PAUSE"]:
                 no_pages += 1
-            print(f"{no_pages = }")
         no_rows = (no_pages + 1) // 2
         _, axes = plt.subplots(no_rows, 1 if no_pages == 1 else 2, figsize=(no_pages*subplot_size[0], no_rows*subplot_size[1]))
         last_x, last_y = 0, 0
@@ -54,6 +55,8 @@ class GCode:
             ax = axes[0][0]
         page = 1
         for line in self.get_lines():
+            if line.startswith("#"):
+                continue # Ignore comments.
             if line == PEN["UP"]:
                 pen_down = False
             elif line == PEN["DOWN"]:
@@ -69,27 +72,45 @@ class GCode:
                     y = last_y
                 ax.plot([last_x, x], [last_y, y], f"{col}{style}")
                 last_x, last_y = x, y
+            elif line.startswith("G2") or line.startswith("G3"):
+                style =  "-"
+                col = "b" if pen_down else "r"
+                center = np.array([get_coordinate(line, "I"), get_coordinate(line, "J")])
+                start = np.array([last_x, last_y])
+                end = np.array([get_coordinate(line, "X"), get_coordinate(line, "Y")])
+                radius = np.linalg.norm(start - center)
+                thetas = [np.atan2(*np.flip(start-center)), np.atan2(*np.flip(end-center))]
+                thetas = [x * 180 / np.pi for x in thetas]
+                if line.startswith("G2"): # clockwise
+                    thetas = [x for x in reversed(thetas)]
+                # Arc draws counterclockwise starting at (1,0)
+                arc = Arc((center[0], center[1]), 2*radius, 2*radius
+                          , theta1=thetas[0], theta2=thetas[1]
+                          , edgecolor=col, linestyle=style, fill=False)
+                ax.add_patch(arc)
+                last_x, last_y = end[0], end[1]
             elif line == PEN['PAUSE']:
                 if no_pages <= 2:
                     ax = axes[1]
                 else:
                     ax = axes[page//2][page % 2]
                 page += 1
-            elif line == '\n':
+            elif line == '':
                 pass
             else:
                 print(f"Warning: Unknown Gcode command {line}")
         plt.show()
 
     def translate(self, vector: tuple[float], inplace: bool = False) -> None:
-        x, y = vector
         new_gcode = ""
         for line in self.gcode.split("\n"):
-            if line.startswith("G1") or line.startswith("G0"):
-                old_x = get_coordinate(line, "X")
-                old_y = get_coordinate(line, "Y")
-                new_gcode += replace_coordinate(replace_coordinate(
-                    line, "X", old_x+x if old_x is not None else "dummy"), "Y", old_y+y if old_y is not None else "dummy") + "\n"
+            if line[0:2] in ["G0", "G1", "G2", "G3"]:
+                new_line = line
+                for coord in ["X", "Y", "I", "J"]:
+                    old = get_coordinate(line, coord)
+                    i = 0 if coord in ["X", "I"] else 1
+                    new_line = replace_coordinate(new_line, coord, old + vector[i] if old is not None else "dummy")
+                new_gcode += new_line + "\n"
             else:
                 new_gcode += line + "\n"
         if inplace:
@@ -125,7 +146,9 @@ class GCode:
     def get_lines(self):
         return self.gcode.split("\n")
     
-    def add_command(self, command: str):
+    def add_command(self, command: str, comment: str = None):
+        if comment is not None:
+            self.gcode += "\n# " + comment
         self.gcode += "\n" + command
 
     def save(self, path: str):
