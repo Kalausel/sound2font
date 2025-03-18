@@ -118,24 +118,32 @@ class GCode:
         else:
             return self.__class__(new_gcode)
     
-    def clean(self, remove_duplicates: list = [PEN["UP"], PEN["DOWN"], PEN["PAUSE"]]
-              , collapse_G0: bool = True):
-        # Remove double G0 commands
-        # Remove double Pen up or Pen down commands
+    def clean(self):
+        # 1) Remove PENUP if already up and PENDOWN if already down.
+        # 2) Remove successive G0 commands. Ignore comments and empty lines.
         unclean = self.get_lines()
         rm_ids = []
+        pen_down = None
         for i, line in enumerate(unclean):
+            if line in [PEN["DOWN"], PEN["UP"]]:
+                if pen_down is not None:
+                    if pen_down and line == PEN["DOWN"] or not pen_down and line == PEN["UP"]:
+                        rm_ids.append(i)
+                pen_down = True if line == PEN["DOWN"] else False
+        semiclean = [x for i, x in enumerate(unclean) if not i in rm_ids]
+        rm_ids = []
+        for i, line in enumerate(semiclean):
             if i == 0:
+                last_line = line
+                last_idx = i
                 continue
-            if line in remove_duplicates and unclean[i-1] == line:
-                rm_ids.append(i)
-            if collapse_G0 and line.startswith('G0') and unclean[i-1].startswith('G0'):
-                rm_ids.append(i-1)
-            if i >= 2 and line == PEN["PAUSE"]:
-                 if unclean[i-1].startswith('G0') and unclean[i-2] == PEN["UP"] and unclean[i-3].startswith('G0') and unclean[i-4] == PEN["UP"]:
-                     rm_ids.append(i-3)
-                     rm_ids.append(i-4)
-        self.gcode = "\n".join([x for i, x in enumerate(unclean) if not i in rm_ids])
+            if line.startswith("#") or line == "":
+                continue
+            if line.startswith('G0') and last_line.startswith('G0'):
+                rm_ids.append(last_idx)
+            last_line = line
+            last_idx = i
+        self.gcode = "\n".join([x for i, x in enumerate(semiclean) if not i in rm_ids])
 
     def append(self, other: "GCode", inplace: bool = True):
         if inplace:

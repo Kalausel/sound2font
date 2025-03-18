@@ -37,7 +37,7 @@ class Text2Font:
         self.pen_down = False
 
     def convert(self, text: str, clean: bool = True) -> GCode:
-        gcode = GCode("")
+        gcode = GCode(PEN["UP"]) # Make sure that the pen is up at the start.
         gcode.add_command(f"G0 X{self.current_position[0]} Y{self.current_position[1]}", comment="Move to initial position")
         #paragraphs = text.split("\n")
         #no_paragraphs = len(paragraphs)
