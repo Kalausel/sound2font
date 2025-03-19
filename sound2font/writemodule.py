@@ -45,7 +45,34 @@ def add_coordinate(line: str, coord: str, value: float) -> str:
         return line[:space_idx] + f" Y{value}" + line[space_idx:]
     else:
         raise ValueError(f"add_coordinate: coord must be \"X\" or \"Y\". Received {coord}.")
+    
+def bezier_max(line: str, coord: str, clockwise: bool) -> float:
+    raise NotImplementedError
 
+def circle_max(line: str, coord: str, start: tuple[float]) -> float:
+    if coord != "X":
+        raise NotImplementedError
+    if not line.startswith('G2') and not line.startswith('G3'):
+        raise ValueError(f"circle_max: Expecting line that starts with 'G2' or 'G3'. Got {line}")
+    start = np.array(start)
+    center = np.array([get_coordinate(line, "I"), get_coordinate(line, "J")])
+    end = np.array([get_coordinate(line, "X"), get_coordinate(line, "Y")])
+    radius = np.linalg.norm(start - center)
+    thetas = [np.atan2(*np.flip(start-center)), np.atan2(*np.flip(end-center))]
+    print(f"Initially: {thetas=}")
+    thetas = [(x * 180 / np.pi) for x in thetas] # Angles in the interval [-180, 180)
+    print(f"Then: {thetas=}")
+    if line.startswith('G2'): # If clockwise, make it counterclockwise.
+        thetas = [x for x in reversed(thetas)]
+    # If angle 0 is in the range, this is the maximum.
+    print(f"{start=}\n{center=}\n{end=}\n{thetas=}\n{radius=}")
+    if thetas[0] < 0 and thetas[1] > 0 or \
+        all(np.sign(thetas) == 1) and thetas[0] > thetas[1] or \
+        all(np.sign(thetas) == -1) and thetas[0] > thetas[1]:
+        return center[0] + radius
+    # If not, the maximum is at one of the arc's ends.
+    else:
+        return center[0] + radius * np.cos(np.min(np.abs(thetas)) * np.pi / 180)
 
 class GCode:
     # This class stores Gcode commands.
@@ -284,9 +311,28 @@ class Character:
         return (x, y)
 
     def calculate_width(self):
+        # This is technically the maximum x.
+        # But letters all start at x=0.
+        # If they reach x<0 in the middle, the maximum x is still the relevant quantity.
         old_x = 0
+        cursor = (0,0)
         for line in self.gcode.get_lines():
-            x = get_coordinate(line, "X")
+            x = None
+            if line.startswith('G0'):
+                cur_x = get_coordinate(line, "X")
+                cur_y = get_coordinate(line, "Y")
+                cursor = (cur_x if cur_x is not None else cursor[0], cur_y if cur_y is not None else cursor[1])
+            elif line.startswith('G1'):
+                x = get_coordinate(line, "X")
+                cur_y = get_coordinate(line, "Y")
+                cursor = (cur_x if cur_x is not None else cursor[0], cur_y if cur_y is not None else cursor[1])
+            elif line.startswith('G2') or line.startswith('G3'):
+                x = circle_max(line, "X", start=cursor)
+                cursor = (get_coordinate(line, "X"), get_coordinate(line, "Y"))
+            elif line.startswith('G4') or line.startswith('G5'):
+                x = bezier_max(line, "X", clockwise=line.startswith('G4'))
+                cursor = (0,0)
+                raise NotImplementedError
             if x is not None and x > old_x:
                 old_x = x
         return old_x
