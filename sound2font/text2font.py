@@ -93,6 +93,8 @@ class Text2Font:
             # Adds GCode and changes current position both until beginning of new char.
             # In the case of connected fonts, this is the end of the current char.
             gcode.add_command(self.gcode_and_move_cursor(char), comment=f"Char {char}")
+        if not self.gap_between_chars: # Otherwise, PENUP is already added in self.gcode_and_move_cursor().
+            gcode.add_command(PEN["UP"])
         return gcode
     
     def gcode_and_move_cursor(self, char: str) -> str:

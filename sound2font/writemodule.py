@@ -12,6 +12,8 @@ PEN = {
 
 DISCONNECTED_CHARS = [".", ",", "!", "-", "'", "?", ":", ";"]
 
+COORDS = ["X", "Y", "I", "J"]
+
 def get_coordinate(line: str, coord: str, return_str: bool = False):
     if not coord in ["X", "Y", "I", "J"]:
         raise ValueError(f"Coordinate {coord} not recognised. Must be 'X' or 'Y'.")
@@ -27,10 +29,10 @@ def replace_coordinate(line: str, coord: str, new_value: float):
         return line
     return line.replace(f"{coord}{old_value}", f"{coord}{new_value}")
 
-def add_coord(line: str, coord: str, value: float) -> str:
+def add_coordinate(line: str, coord: str, value: float) -> str:
     # Check that coordinate does not exist.
     if get_coordinate(line, coord) is not None:
-        raise ValueError(f"add_coord: Coordinate {coord} already exists in line \"{line}\"")
+        raise ValueError(f"add_coordinate: Coordinate {coord} already exists in line \"{line}\"")
     if coord == "X":
         # Insert x into the line.
         return line.split("Y")[0] + f"X{value} Y" + line.split("Y")[1]
@@ -42,7 +44,7 @@ def add_coord(line: str, coord: str, value: float) -> str:
             space_idx = len(line)
         return line[:space_idx] + f" Y{value}" + line[space_idx:]
     else:
-        raise ValueError(f"add_coord: coord must be \"X\" or \"Y\". Received {coord}.")
+        raise ValueError(f"add_coordinate: coord must be \"X\" or \"Y\". Received {coord}.")
 
 
 class GCode:
@@ -54,7 +56,9 @@ class GCode:
     def __init__(self, commandstr: str):
         self.commandstr = commandstr
 
-    def show(self, subplot_size: tuple[float] = (6,6)):
+    def plot(self, subplot_size: tuple[float] = (6,6)
+             , return_axes: bool = False
+             , show: bool = True):
         # This method plots the Gcode to a matplotlib plot.
         # TODO Arcs and curves
         pen_down = False
@@ -118,14 +122,17 @@ class GCode:
                 pass
             else:
                 print(f"Warning: Unknown Gcode command {line}")
-        plt.show()
+        if show:
+            plt.show()
+        if return_axes:
+            return axes
 
     def translate(self, vector: tuple[float], inplace: bool = False) -> None:
         new_commandstr = ""
         for line in self.commandstr.split("\n"):
             if line[0:2] in ["G0", "G1", "G2", "G3"]:
                 new_line = line
-                for coord in ["X", "Y", "I", "J"]:
+                for coord in COORDS:
                     old = get_coordinate(line, coord)
                     i = 0 if coord in ["X", "I"] else 1
                     new_line = replace_coordinate(new_line, coord, old + vector[i] if old is not None else "dummy")
@@ -188,7 +195,7 @@ class GCode:
         for tup in add_coords:
             idx, coord, value = tup
             if not commented[idx].startswith("#"):
-                commented[idx] = add_coord(commented[idx], coord, value)
+                commented[idx] = add_coordinate(commented[idx], coord, value)
         self.commandstr = "\n".join(x for x in commented)
         
 
@@ -198,8 +205,11 @@ class GCode:
         else:
             return self.__class__(self.commandstr + "\n" + other.commandstr)
 
-    def get_lines(self):
-        return self.commandstr.split("\n")
+    def get_lines(self, skip_comments: bool = False):
+        if not skip_comments:
+            return self.commandstr.split("\n")
+        else:
+            return [x for x in self.commandstr.split("\n") if not x.startswith("#")]
     
     def add_command(self, command: str, comment: str = None):
         if comment is not None:
@@ -209,10 +219,38 @@ class GCode:
                 self.commandstr += "\n# " + comment
         self.commandstr += "\n" + command
 
+    def __len__(self):
+        return len(self.commandstr)
+    
+    def __eq__(self, other):
+        # Comments are on extra lines.
+        # This equality operator only works on two cleaned GCode objects. It expects standard format.
+        result = True # until proven otherwise.
+        if self.commandstr == other.commandstr:
+            return result
+        sugo = [x for x in self.get_lines() if not x.startswith("#") and not x == ""]
+        other_sugo = [x for x in other.get_lines() if not x.startswith("#") and not x == ""]
+        for line, otherline in zip(sugo, other_sugo):
+            if line == otherline:
+                continue
+            else:
+                for coord in COORDS:
+                    if coord in line and coord in otherline:
+                        thisx = get_coordinate(line, coord)
+                        otherx = get_coordinate(otherline, coord)
+                        if not np.isclose(thisx, otherx):
+                            result = False
+                    elif coord not in line and coord not in otherline:
+                        continue
+                    else:
+                        result = False
+        return result
+
     def save(self, path: str):
         with open(path, "w") as f:
             f.write(self.commandstr)
     
+    @classmethod
     def load(cls, path: str):
         with open(path, "r") as f:
             return cls(f.read())
