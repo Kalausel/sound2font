@@ -84,7 +84,8 @@ class GCode:
 
     def plot(self, subplot_size: tuple[float] = (6,6)
              , return_axes: bool = False
-             , show: bool = True):
+             , show: bool = True
+             , show_moves: bool = True):
         # This method plots the Gcode to a matplotlib plot.
         # TODO Arcs and curves
         pen_down = False
@@ -122,7 +123,8 @@ class GCode:
                 y = get_coordinate(line, "Y")
                 if y is None:
                     y = last_y
-                ax.plot([last_x, x], [last_y, y], f"{col}{style}")
+                if line.startswith('G1') or line.startswith('G0') and show_moves:
+                    ax.plot([last_x, x], [last_y, y], f"{col}{style}")
                 last_x, last_y = x, y
             elif line.startswith("G2") or line.startswith("G3"):
                 style =  "-"
@@ -326,9 +328,9 @@ class Character:
         for line in self.gcode.get_lines():
             x = None
             if line.startswith('G0'):
-                cur_x = get_coordinate(line, "X")
+                x = get_coordinate(line, "X")
                 cur_y = get_coordinate(line, "Y")
-                cursor = (cur_x if cur_x is not None else cursor[0], cur_y if cur_y is not None else cursor[1])
+                cursor = (x if x is not None else cursor[0], cur_y if cur_y is not None else cursor[1])
             elif line.startswith('G1'):
                 x = get_coordinate(line, "X")
                 cur_y = get_coordinate(line, "Y")
