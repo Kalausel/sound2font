@@ -12,6 +12,8 @@ PEN = {
 
 DISCONNECTED_CHARS = [".", ",", "!", "-", "'", "?", ":", ";"]
 
+PUNCTS = ['.', '!', ',', '\'']
+
 COORDS = ["X", "Y", "I", "J"]
 
 def get_coordinate(line: str, coord: str, return_str: bool = False):
@@ -59,13 +61,10 @@ def circle_max(line: str, coord: str, start: tuple[float]) -> float:
     end = np.array([get_coordinate(line, "X"), get_coordinate(line, "Y")])
     radius = np.linalg.norm(start - center)
     thetas = [np.atan2(*np.flip(start-center)), np.atan2(*np.flip(end-center))]
-    print(f"Initially: {thetas=}")
     thetas = [(x * 180 / np.pi) for x in thetas] # Angles in the interval [-180, 180)
-    print(f"Then: {thetas=}")
     if line.startswith('G2'): # If clockwise, make it counterclockwise.
         thetas = [x for x in reversed(thetas)]
     # If angle 0 is in the range, this is the maximum.
-    print(f"{start=}\n{center=}\n{end=}\n{thetas=}\n{radius=}")
     if thetas[0] < 0 and thetas[1] > 0 or \
         all(np.sign(thetas) == 1) and thetas[0] > thetas[1] or \
         all(np.sign(thetas) == -1) and thetas[0] > thetas[1]:
@@ -104,10 +103,13 @@ class GCode:
         else:
             ax = axes[0][0]
         page = 1
-        for line in self.get_lines():
+        for idx, line in enumerate(self.get_lines()):
             if line.startswith("#"):
                 continue # Ignore comments.
             if line == PEN["UP"]:
+                if idx != 0:
+                    if self.get_lines()[idx-1] == PEN["DOWN"]:
+                        ax.scatter([last_x], [last_y], c='b', marker='.')
                 pen_down = False
             elif line == PEN["DOWN"]:
                 pen_down = True
@@ -196,6 +198,11 @@ class GCode:
                 last_idx = 0
                 continue
             if line.startswith("#") or line == "" or line in [PEN["DOWN"], PEN["UP"]]:
+                if line == PEN["UP"] and semiclean[i-1] == PEN["DOWN"]:
+                    # This catches the case of a '.'.
+                    last_line = "dummy"
+                    carry_x = None
+                    carry_y = None
                 continue
             if line.startswith('G0') and last_line.startswith('G0'):
                 last_x, last_y = get_coordinate(last_line, "X"), get_coordinate(last_line, "Y")
@@ -325,7 +332,7 @@ class Character:
             elif line.startswith('G1'):
                 x = get_coordinate(line, "X")
                 cur_y = get_coordinate(line, "Y")
-                cursor = (cur_x if cur_x is not None else cursor[0], cur_y if cur_y is not None else cursor[1])
+                cursor = (x if x is not None else cursor[0], cur_y if cur_y is not None else cursor[1])
             elif line.startswith('G2') or line.startswith('G3'):
                 x = circle_max(line, "X", start=cursor)
                 cursor = (get_coordinate(line, "X"), get_coordinate(line, "Y"))

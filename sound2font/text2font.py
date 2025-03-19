@@ -1,7 +1,7 @@
 from warnings import warn
 import json
 
-from sound2font.writemodule import Alphabet, GCode, PEN, DISCONNECTED_CHARS
+from sound2font.writemodule import Alphabet, GCode, PEN, DISCONNECTED_CHARS, PUNCTS
 
 class Text2Font:
     # Origin at top left
@@ -10,9 +10,10 @@ class Text2Font:
                  , font_path: str, gap_between_chars: bool
                  , font_size: float, line_spacing: float
                  , char_spacing: float = 0
-                 , space_ratio: float = 0.4
+                 , space_ratio: float = 0.25
                  , initial_position: tuple[float, float] = None
                  , string_alphabet: bool = False
+                 , punct_spacing: float = None
     ):
         self.width = width
         self.height = height
@@ -25,6 +26,10 @@ class Text2Font:
         # self.current_position is changes in Y only integer lines.
         self.current_position = self.initial_position
         self.char_spacing = char_spacing
+        if self.char_spacing == 0 and punct_spacing is None:
+            self.punct_spacing = 0.2 * font_size
+        else:
+            self.punct_spacing = punct_spacing
         self.font_size = font_size
         self.space_width = space_ratio * font_size
         self.font_path = font_path
@@ -99,14 +104,21 @@ class Text2Font:
     
     def gcode_and_move_cursor(self, char: str) -> str:
         # 1) Calculate the next character's starting position
-        next_char_pos = (self.current_position[0] + self.alphabet.symbols[char].width + self.char_spacing, self.current_position[1])
+        if char in PUNCTS and self.punct_spacing is not None:
+            self.current_position = (self.current_position[0] - self.char_spacing + self.punct_spacing, self.current_position[1])
+            next_char_pos = (self.current_position[0] + self.alphabet.symbols[char].width + self.punct_spacing, self.current_position[1])
+        else:
+            next_char_pos = (self.current_position[0] + self.alphabet.symbols[char].width + self.char_spacing, self.current_position[1])
+        
         # Split up the word if it is longer than a whole line.
-        if next_char_pos[0] - self.char_spacing + self.alphabet.symbols["-"].width > self.width:
+        if not char in PUNCTS and next_char_pos[0] - self.char_spacing + self.alphabet.symbols["-"].width > self.width:
             commandstr = self._add_hyphen().commandstr
             commandstr += "\n# New line within word because the character does not have enough space left\n" + self.new_line().commandstr + "\n"
             if self.current_position[1] < 0:
                 commandstr += "# New page within word because the character does not have enough space left\n" + self.new_page().commandstr + "\n"
             next_char_pos = (self.current_position[0] + self.alphabet.symbols[char].width + self.char_spacing, self.current_position[1])
+        elif char in PUNCTS:
+            commandstr = f"G0 X{self.current_position[0]} Y{self.current_position[1]}"
         else:
             commandstr = ""
         # If not self.gap_between_chars, next_char_pos == char.final_position.
