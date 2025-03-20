@@ -7,7 +7,7 @@ class Text2Font:
     # Origin at top left
 
     def __init__(self, width: float, height: float
-                 , font_path: str, gap_between_chars: bool
+                 , font_path: str, connected: bool
                  , font_size: float, line_spacing: float
                  , char_spacing: float = 0
                  , space_ratio: float = 0.25
@@ -33,7 +33,7 @@ class Text2Font:
         self.font_size = font_size
         self.space_width = space_ratio * font_size
         self.font_path = font_path
-        self.gap_between_chars = gap_between_chars
+        self.connected = connected
         if string_alphabet:
             self.alphabet = Alphabet.load_from_string_dict(font_path)
         else:
@@ -98,7 +98,7 @@ class Text2Font:
             # Adds GCode and changes current position both until beginning of new char.
             # In the case of connected fonts, this is the end of the current char.
             gcode.add_command(self.gcode_and_move_cursor(char), comment=f"Char {char}")
-        if not self.gap_between_chars: # Otherwise, PENUP is already added in self.gcode_and_move_cursor().
+        if self.connected: # Otherwise, PENUP is already added in self.gcode_and_move_cursor().
             gcode.add_command(PEN["UP"])
         return gcode
     
@@ -121,12 +121,12 @@ class Text2Font:
             commandstr = f"G0 X{self.current_position[0]} Y{self.current_position[1]}"
         else:
             commandstr = ""
-        # If not self.gap_between_chars, next_char_pos == char.final_position.
+        # If self.connected, next_char_pos == char.final_position.
         # If this is not the case, the code will work, but the first line of the next char will be wrong.
         # This is probably okay for cursive font. Characters can have slightly different starting positions.
         # 2) Add the gcode command string
         commandstr += self.alphabet.symbols[char].gcode.translate(self.current_position).commandstr
-        if self.gap_between_chars or char in DISCONNECTED_CHARS:
+        if not self.connected or char in DISCONNECTED_CHARS:
             # 3) Add G0 movement to the next character's starting position. Only if disconnected.
             commandstr = PEN['UP'] + "\n" + commandstr
             commandstr += "\n" + (PEN["UP"])

@@ -1,6 +1,7 @@
 from warnings import warn
 import json
-from matplotlib.patches import Arc
+from matplotlib.patches import Arc, PathPatch
+from matplotlib.path import Path
 from matplotlib import pyplot as plt
 import numpy as np
 
@@ -14,11 +15,11 @@ DISCONNECTED_CHARS = [".", ",", "!", "-", "'", "?", ":", ";"]
 
 PUNCTS = ['.', '!', ',', '\'']
 
-COORDS = ["X", "Y", "I", "J"]
+COORDS = ["X", "Y", "I", "J", "P", "Q"]
 
 def get_coordinate(line: str, coord: str, return_str: bool = False):
-    if not coord in ["X", "Y", "I", "J"]:
-        raise ValueError(f"Coordinate {coord} not recognised. Must be 'X' or 'Y'.")
+    if not coord in COORDS:
+        raise ValueError(f"Coordinate {coord} not recognised. Must be one of {COORDS}.")
     if coord not in line:
         return None
     if return_str:
@@ -73,6 +74,17 @@ def circle_max(line: str, coord: str, start: tuple[float]) -> float:
     else:
         return center[0] + radius * np.cos(np.min(np.abs(thetas)) * np.pi / 180)
 
+def cubicbezier2gcode(start: 'np.array|list', end: 'np.array|list', start_angle: float, end_angle: float, curvature: tuple[float]) -> 'GCode':
+    # Unit vectors
+    # The curvature parameter describes the distance of the auxiliary points to their respective starting points, relative to the distance start-end.
+    for arg in [start, end]:
+        if isinstance(arg, list):
+            arg = np.array(arg)
+    distance = np.linalg.norm(end - start)
+    p12 = distance * curvature * np.array([np.cos(start_angle), np.sin(start_angle)])
+    p43 = (-1) * distance * curvature * np.array([np.cos(end_angle), np.sin(end_angle)])
+    return GCode(f"G5 I{p12[0]} J{p12[1]} P{p43[0]} Q{p43[1]} X{end[0]} Y{end[1]}")
+
 class GCode:
     # This class stores Gcode commands.
     # I want the string to start with the command to go to the starting position.
@@ -85,7 +97,8 @@ class GCode:
     def plot(self, subplot_size: tuple[float] = (6,6)
              , return_axes: bool = False
              , show: bool = True
-             , show_moves: bool = True):
+             , show_moves: bool = True
+             , show_control_points: bool = False):
         # This method plots the Gcode to a matplotlib plot.
         # TODO Arcs and curves
         pen_down = False
@@ -144,6 +157,23 @@ class GCode:
                           , edgecolor=col, linestyle=style, fill=False)
                 ax.add_patch(arc)
                 last_x, last_y = end[0], end[1]
+            elif line.startswith('G5'):
+                # Cubic Bezier curve
+                style =  "-"
+                col = "b" if pen_down else "r"
+                p12 = np.array([get_coordinate(line, "I"), get_coordinate(line, "J")])
+                p43 = np.array([get_coordinate(line, "P"), get_coordinate(line, "Q")])
+                start = np.array([last_x, last_y])
+                end = np.array([get_coordinate(line, "X"), get_coordinate(line, "Y")])
+                verts = [start, start + p12, end + p43, end]
+                codes = [Path.MOVETO, Path.CURVE4, Path.CURVE4, Path.CURVE4]
+                path = Path(verts, codes)
+                patch = PathPatch(path, facecolor='none', edgecolor='b')
+                ax.add_patch(patch)
+                if show_control_points:
+                    xs, ys = zip(*verts)
+                    ax.plot(xs, ys, 'x--', lw=2, color='black', ms=10)
+                last_x, last_y = end[0], end[1]
             elif line == PEN['PAUSE']:
                 if no_pages <= 2:
                     ax = axes[1]
@@ -161,9 +191,12 @@ class GCode:
     def translate(self, vector: tuple[float], inplace: bool = False) -> None:
         new_commandstr = ""
         for line in self.commandstr.split("\n"):
-            if line[0:2] in ["G0", "G1", "G2", "G3"]:
+            if line[0:2] in ["G0", "G1", "G2", "G3", "G5"]:
                 new_line = line
                 for coord in COORDS:
+                    if line[0:2] == "G5" and coord not in ["X", "Y"]:
+                        # In Bezier curves, I, J, P, Q are relative vectors, hence shall not be translated.
+                        continue
                     old = get_coordinate(line, coord)
                     i = 0 if coord in ["X", "I"] else 1
                     new_line = replace_coordinate(new_line, coord, old + vector[i] if old is not None else "dummy")
@@ -324,6 +357,8 @@ class Character:
         # This is technically the maximum x.
         # But letters all start at x=0.
         # If they reach x<0 in the middle, the maximum x is still the relevant quantity.
+        # I will ignore inner points of Bezier curves because this will entail a large effort with no tangible benefit.
+        # In any case, for connected fonts, we really care about the endpoint.
         old_x = 0
         cursor = (0,0)
         for line in self.gcode.get_lines():
@@ -339,10 +374,11 @@ class Character:
             elif line.startswith('G2') or line.startswith('G3'):
                 x = circle_max(line, "X", start=cursor)
                 cursor = (get_coordinate(line, "X"), get_coordinate(line, "Y"))
-            elif line.startswith('G4') or line.startswith('G5'):
-                x = bezier_max(line, "X", clockwise=line.startswith('G4'))
-                cursor = (0,0)
-                raise NotImplementedError
+            elif line.startswith('G5'):
+                # From Bezier curce, just analyse the endpoints. The endpoint of the letter should be the max x point anyway.
+                x = get_coordinate(line, "X")
+                cur_y = get_coordinate(line, "Y")
+                cursor = (x if x is not None else cursor[0], cur_y if cur_y is not None else cursor[1])
             if x is not None and x > old_x:
                 old_x = x
         return old_x
@@ -351,7 +387,7 @@ class Character:
         new_gcode = GCode("")
         for line in self.gcode.get_lines():
             new_line = line
-            for coord in ["X", "Y", "I", "J"]:
+            for coord in COORDS:
                 old = get_coordinate(line, coord)
                 new_line = replace_coordinate(new_line, coord, old*factor if old is not None else "dummy")
             new_gcode.add_command(new_line)
