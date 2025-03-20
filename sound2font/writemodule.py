@@ -104,12 +104,13 @@ class GCode:
         else:
             ax = axes[0][0]
         page = 1
+        last_line = None
         for idx, line in enumerate(self.get_lines()):
-            if line.startswith("#"):
+            if line.startswith("#") or line == "":
                 continue # Ignore comments.
             if line == PEN["UP"]:
                 if idx != 0:
-                    if self.get_lines()[idx-1] == PEN["DOWN"]:
+                    if last_line == PEN["DOWN"]:
                         ax.scatter([last_x], [last_y], c='b', marker='.')
                 pen_down = False
             elif line == PEN["DOWN"]:
@@ -149,10 +150,9 @@ class GCode:
                 else:
                     ax = axes[page//2][page % 2]
                 page += 1
-            elif line == '':
-                pass
             else:
                 print(f"Warning: Unknown Gcode command {line}")
+            last_line = line
         if show:
             plt.show()
         if return_axes:
@@ -190,23 +190,19 @@ class GCode:
                         rm_ids.append(i)
                 pen_down = True if line == PEN["DOWN"] else False
         semiclean = [x if not i in rm_ids else "# " + x + " CLEANED" for i, x in enumerate(unclean)]
+        # Before collapsing the G0 commands, replace PENUP and PENDOWN commands because they also start with G0.
+        semiclean = ['PENDOWN' if line == PEN["DOWN"] else 'PENUP' if line == PEN["UP"] else line for line in semiclean]
         rm_ids = []
         add_coords = []
         carry_x = None
         carry_y = None
+        started = False
         for i, line in enumerate(semiclean):
-            if i == 0:
-                last_line = line
-                last_idx = 0
+            if line.startswith("#") or line == "":
                 continue
-            if line.startswith("#") or line == "" or line in [PEN["DOWN"], PEN["UP"]]:
-                if line == PEN["UP"] and semiclean[i-1] == PEN["DOWN"]:
-                    # This catches the case of a '.'.
-                    last_line = "dummy"
-                    carry_x = None
-                    carry_y = None
-                continue
-            if line.startswith('G0') and last_line.startswith('G0'):
+            elif not started:
+                started = True
+            elif line.startswith('G0') and last_line.startswith('G0'):
                 last_x, last_y = get_coordinate(last_line, "X"), get_coordinate(last_line, "Y")
                 new_x, new_y = get_coordinate(line, "X"), get_coordinate(line, "Y")
                 if new_x is None:
@@ -222,9 +218,13 @@ class GCode:
                     elif carry_y is not None:
                         add_coords.append((i, "Y", carry_y))
                 rm_ids.append(last_idx)
-            if not line.startswith('G0') and last_line.startswith('G0'):
+            elif not line.startswith('G0'):
                 carry_x = None
                 carry_y = None
+            elif line.startswith('G0'):
+                pass
+            else:
+                warn(f"GCode.clean(): Line {line} not expected.")
             last_line = line
             last_idx = i
         commented = [x if not i in rm_ids else "# " + x + " CLEANED" for i, x in enumerate(semiclean)]
@@ -232,6 +232,7 @@ class GCode:
             idx, coord, value = tup
             if not commented[idx].startswith("#"):
                 commented[idx] = add_coordinate(commented[idx], coord, value)
+        commented = [PEN["DOWN"] if line == 'PENDOWN' else PEN['UP'] if line == 'PENUP' else line for line in commented]
         self.commandstr = "\n".join(x for x in commented)
         
 
