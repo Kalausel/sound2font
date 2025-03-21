@@ -143,7 +143,7 @@ class GCode:
         last_line = None
         for idx, line in enumerate(self.get_lines()):
             if line.startswith("#") or line == "":
-                pass # Ignore comments.
+                continue # Ignore comments.
             elif line == PEN["UP"]:
                 if idx != 0:
                     if last_line == PEN["DOWN"]:

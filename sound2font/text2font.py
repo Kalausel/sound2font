@@ -51,7 +51,9 @@ class Text2Font:
         gcode.add_command(f"G0 X{self.current_position[0]} Y{self.current_position[1]}", comment="Move to initial position")
         for i, paragraph in enumerate(text.split("\n")):
             if paragraph == "":
+                # Triggers, when paragraph starts or ends with '\n'.
                 gcode.add_command(self.new_line().commandstr, comment="New line because start of explicit newline character")
+                continue
             if i != 0:
                 gcode.add_command(self.new_line().commandstr, comment="New line because start of new paragraph") # Changes self.current_position and adds G0 move.
             for j, word in enumerate(paragraph.split(" ")):
