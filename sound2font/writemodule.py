@@ -95,12 +95,13 @@ def circle_max(line: str, coord: str, start: tuple[float]) -> float:
 def cubicbezier2gcode(start: 'np.array|list', end: 'np.array|list', start_angle: float, end_angle: float, curvature: tuple[float]) -> 'GCode':
     # Unit vectors
     # The curvature parameter describes the distance of the auxiliary points to their respective starting points, relative to the distance start-end.
-    for arg in [start, end]:
-        if isinstance(arg, list):
-            arg = np.array(arg)
+    if isinstance(start, list):
+        start = np.array(start)
+    if isinstance(end, list):
+        end = np.array(end)
     distance = np.linalg.norm(end - start)
-    p12 = distance * curvature * np.array([np.cos(start_angle), np.sin(start_angle)])
-    p43 = (-1) * distance * curvature * np.array([np.cos(end_angle), np.sin(end_angle)])
+    p12 = distance * curvature[0] * np.array([np.cos(start_angle), np.sin(start_angle)])
+    p43 = (-1) * distance * curvature[1] * np.array([np.cos(end_angle), np.sin(end_angle)])
     return GCode(f"G5 I{p12[0]} J{p12[1]} P{p43[0]} Q{p43[1]} X{end[0]} Y{end[1]}")
 
 class GCode:
@@ -119,6 +120,7 @@ class GCode:
              , show_control_points: bool = False
              , grid: bool = False
              , equal_aspect: bool = True
+             , canvas_size: tuple[float] = None
              , title: str = None):
         # This method plots the Gcode to a matplotlib plot.
         # TODO Arcs and curves
@@ -140,11 +142,9 @@ class GCode:
         page = 1
         last_line = None
         for idx, line in enumerate(self.get_lines()):
-            if equal_aspect:
-                ax.set_aspect('equal')
             if line.startswith("#") or line == "":
-                continue # Ignore comments.
-            if line == PEN["UP"]:
+                pass # Ignore comments.
+            elif line == PEN["UP"]:
                 if idx != 0:
                     if last_line == PEN["DOWN"]:
                         ax.scatter([last_x], [last_y], c='b', marker='.')
@@ -191,25 +191,33 @@ class GCode:
                 verts = [start, start + p12, end + p43, end]
                 codes = [Path.MOVETO, Path.CURVE4, Path.CURVE4, Path.CURVE4]
                 path = Path(verts, codes)
-                patch = PathPatch(path, facecolor='none', edgecolor='b')
+                patch = PathPatch(path, facecolor='none', edgecolor=col)
                 ax.add_patch(patch)
-                if show_control_points:
-                    xs, ys = zip(*verts)
-                    ax.plot(xs, ys, 'x--', lw=2, color='black', ms=10)
+                ctrl_style = 'x--' if show_control_points else '-'
+                lw = 2 if show_control_points else 0
+                xs, ys = zip(*verts)
+                ax.plot(xs, ys, ctrl_style, lw=lw, color='black', ms=10)
                 last_x, last_y = end[0], end[1]
-            elif line == PEN['PAUSE']:
-                if no_pages <= 2:
-                    ax = axes[1]
-                else:
-                    ax = axes[page//2][page % 2]
-                page += 1
-            else:
+            elif line != PEN["PAUSE"]:
                 print(f"Warning: Unknown Gcode command {line}")
+            if line == PEN['PAUSE'] or idx == self.__len__() - 1:
+                if equal_aspect:
+                    ax.set_aspect('equal')
+                if grid:
+                    ax.grid()
+                if title is not None:
+                    ax.set_title(title)
+                if canvas_size is not None:
+                    ax.set_xlim(0, canvas_size[0])
+                    ax.set_ylim(0, canvas_size[1])
+                if no_pages <= 2 and line == PEN["PAUSE"]:
+                    ax = axes[1]
+                elif line == PEN["PAUSE"]:
+                    ax = axes[page//2][page % 2]
+                else:
+                    pass
+                page += 1
             last_line = line
-        if grid:
-            ax.grid()
-        if title is not None:
-            ax.set_title(title)
         if show:
             plt.show()
         if return_axes:
@@ -317,7 +325,8 @@ class GCode:
         self.commandstr += "\n" + command
 
     def __len__(self):
-        return len(self.commandstr)
+        # Returns number of lines
+        return self.commandstr.count("\n") + 1
     
     def __eq__(self, other):
         # Comments are on extra lines.
@@ -372,14 +381,19 @@ class Character:
         # set by the preceding character in a connected font.
         # I am setting up the characters such that the first segment can be replaced.
         # 1) Find the final position and angle of the first segment.
-        line = self.gcode.get_lines()[0]
-        if not line.startswith('G5'):
+        line = None
+        for i, l in enumerate(self.gcode.get_lines()):
+            if l.startswith('G5'):
+                line = l
+                first_line = i
+                break
+        if line is None:
             raise NotImplementedError(f"sound2font.writemodule.Character.connect() is only implemented for connected characters starting with 'G5'.")
         p34 = (-1) * np.array([get_coordinate(line, "P"), get_coordinate(line, "Q")])
         final_angle = np.atan2(*np.flip(p34))
         final_position = [get_coordinate(line, "X"), get_coordinate(line, "Y")]
-        new_line = cubicbezier2gcode(initial_position, final_position, initial_angle, final_angle, 0.3).commandstr
-        return GCode("\n".join(new_line + self.gcode.get_lines()[1:]))
+        new_line = cubicbezier2gcode(initial_position, final_position, initial_angle, final_angle, (0.3, 0.3)).commandstr
+        return GCode("\n".join([new_line] + self.gcode.get_lines()[first_line+1:]))
 
     def find_final_position(self):
         x = None

@@ -93,12 +93,13 @@ class Text2Font:
             gcode.add_command(self.new_line().commandstr, comment="New line because line has not enough space left for next word")
             if self.current_position[1] < 0:
                 # Adds gcode (pause) and G0 move, and sets self.current_position to 0,self.font_size
-                gcode.add_command(self.new_page().commandstr, comment="New page because next line would exeed y-limit")
+                gcode.add_command(self.new_page().commandstr, comment="New page because next line would exceed y-limit")
         last_char = None
         for char in word:
             # Adds GCode and changes current position both until beginning of new char.
             # In the case of connected fonts, this is the end of the current char.
             gcode.add_command(self.gcode_and_move_cursor(char, last_char=last_char), comment=f"Char {char}")
+            last_char = char
         if self.connected: # Otherwise, PENUP is already added in self.gcode_and_move_cursor().
             gcode.add_command(PEN["UP"])
         return gcode
@@ -112,7 +113,9 @@ class Text2Font:
             next_char_pos = (self.current_position[0] + self.alphabet.symbols[char].width + self.char_spacing, self.current_position[1])
         
         # Split up the word if it is longer than a whole line.
+        new = False
         if not char in PUNCTS and next_char_pos[0] - self.char_spacing + self.alphabet.symbols["-"].width > self.width:
+            new = True
             commandstr = self._add_hyphen().commandstr
             commandstr += "\n# New line within word because the character does not have enough space left\n" + self.new_line().commandstr + "\n"
             if self.current_position[1] < 0:
@@ -126,9 +129,9 @@ class Text2Font:
         # If this is not the case, the code will work, but the first line of the next char will be wrong.
         # This is probably okay for cursive font. Characters can have slightly different starting positions.
         # 2) Add the gcode command string
-        if self.connected and last_char is not None and not last_char in DISCONNECTED_CHARS:
-            commandstr += self.alphabet.symbols[char].connect([0, last_char.final_position[1]]
-                                                              , last_char.final_angle).translate(self.current_position).commandstr
+        if self.connected and last_char is not None and not last_char in DISCONNECTED_CHARS and not char in DISCONNECTED_CHARS and not new:
+            commandstr += self.alphabet.symbols[char].connect([0, self.alphabet.symbols[last_char].final_position[1]]
+                                                              , self.alphabet.symbols[last_char].final_angle).translate(self.current_position).commandstr
         else:
             commandstr += self.alphabet.symbols[char].gcode.translate(self.current_position).commandstr
         if not self.connected or char in DISCONNECTED_CHARS:
