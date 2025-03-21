@@ -1,4 +1,4 @@
-Metadata-Version: 2.2
+Metadata-Version: 2.4
 Name: sound2font
 Version: 0.1.0.dev1
 Summary: Enter speech. Expect a vector file with text.
@@ -11,6 +11,7 @@ Requires-Python: >=3.6
 Requires-Dist: vosk
 Requires-Dist: pyaudio
 Requires-Dist: wave
+Requires-Dist: matplotlib
 Requires-Dist: recasepunc@ git+https://github.com/Kalausel/recasepunc.git
 Dynamic: author
 Dynamic: author-email
