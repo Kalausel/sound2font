@@ -49,8 +49,26 @@ def add_coordinate(line: str, coord: str, value: float) -> str:
     else:
         raise ValueError(f"add_coordinate: coord must be \"X\" or \"Y\". Received {coord}.")
     
-def bezier_max(line: str, coord: str, clockwise: bool) -> float:
-    raise NotImplementedError
+def bezier_max(line: str, coord: str, start: tuple[float], steps: int = 1000, return_min: bool = False) -> float:
+    if coord not in ["X", "Y"]:
+        raise NotImplementedError
+    idx = {"X": 0, "Y": 1}
+    p12 = np.array([get_coordinate(line, "I"), get_coordinate(line, "J")])
+    p43 = np.array([get_coordinate(line, "P"), get_coordinate(line, "Q")])
+    start = np.array([start[0], start[1]])
+    end = np.array([get_coordinate(line, "X"), get_coordinate(line, "Y")])
+    P = [start, start + p12, end + p43, end]
+    if not return_min:
+        max_coord = 0
+    else:
+        min_coord = 100
+    for t in np.linspace(0, 1, steps):
+        new_coord = (1 - t)**3 * P[0] + 3 * (1 - t)**2 * t * P[1] + 3 * (1 - t) * t**2 * P[2] + t**3 * P[3]
+        if not return_min and new_coord[idx[coord]] > max_coord:
+            max_coord = new_coord[idx[coord]]
+        elif return_min and new_coord[idx[coord]] < min_coord:
+            min_coord = new_coord[idx[coord]]
+    return max_coord if not return_min else min_coord
 
 def circle_max(line: str, coord: str, start: tuple[float]) -> float:
     if coord != "X":
@@ -98,7 +116,10 @@ class GCode:
              , return_axes: bool = False
              , show: bool = True
              , show_moves: bool = True
-             , show_control_points: bool = False):
+             , show_control_points: bool = False
+             , grid: bool = False
+             , equal_aspect: bool = True
+             , title: str = None):
         # This method plots the Gcode to a matplotlib plot.
         # TODO Arcs and curves
         pen_down = False
@@ -119,6 +140,8 @@ class GCode:
         page = 1
         last_line = None
         for idx, line in enumerate(self.get_lines()):
+            if equal_aspect:
+                ax.set_aspect('equal')
             if line.startswith("#") or line == "":
                 continue # Ignore comments.
             if line == PEN["UP"]:
@@ -183,6 +206,10 @@ class GCode:
             else:
                 print(f"Warning: Unknown Gcode command {line}")
             last_line = line
+        if grid:
+            ax.grid()
+        if title is not None:
+            ax.set_title(title)
         if show:
             plt.show()
         if return_axes:
@@ -338,6 +365,21 @@ class Character:
         else:
             self.width = width
         self.final_position = self.find_final_position()
+        self.final_angle = self.find_final_angle() # None for many characters.
+
+    def connect(self, initial_position: tuple[float], initial_angle: float) -> GCode:
+        # This method returns a modified GCode to suit the desired boundary conditions
+        # set by the preceding character in a connected font.
+        # I am setting up the characters such that the first segment can be replaced.
+        # 1) Find the final position and angle of the first segment.
+        line = self.gcode.get_lines()[0]
+        if not line.startswith('G5'):
+            raise NotImplementedError(f"sound2font.writemodule.Character.connect() is only implemented for connected characters starting with 'G5'.")
+        p34 = (-1) * np.array([get_coordinate(line, "P"), get_coordinate(line, "Q")])
+        final_angle = np.atan2(*np.flip(p34))
+        final_position = [get_coordinate(line, "X"), get_coordinate(line, "Y")]
+        new_line = cubicbezier2gcode(initial_position, final_position, initial_angle, final_angle, 0.3).commandstr
+        return GCode("\n".join(new_line + self.gcode.get_lines()[1:]))
 
     def find_final_position(self):
         x = None
@@ -352,6 +394,23 @@ class Character:
         if y is None:
             y = 0
         return (x, y)
+    
+    def find_final_angle(self):
+        for line in reversed(self.gcode.get_lines()):
+            if line.startswith("#") or line in ["", PEN["DOWN"], PEN["UP"]]:
+                continue
+            if line.startswith('G2') or line.startswith('G3'):
+                center = np.array([get_coordinate(line, "I"), get_coordinate(line, "J")])
+                end = np.array([get_coordinate(line, "X"), get_coordinate(line, "Y")])
+                theta = np.atan2(*np.flip(end-center))
+                if line.startswith('G2'): # clockwise
+                    return theta - np.pi / 2
+                else: # anti-clockwise
+                    return theta + np.pi / 2
+            if line.startswith('G5'):
+                p34 = (-1) * np.array([get_coordinate(line, "P"), get_coordinate(line, "Q")])
+                return np.atan2(*np.flip(p34))
+        return None
 
     def calculate_width(self):
         # This is technically the maximum x.
