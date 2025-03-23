@@ -1,5 +1,6 @@
 import time
 import wave
+import keyboard
 from pyaudio import PyAudio, paInt16, paContinue
 
 MIC_DEFAULTS = {
@@ -87,8 +88,12 @@ class Microphone:
         self.pyaudio = PyAudio()
         self.sample_width = self.pyaudio.get_sample_size(self.kwargs['format'])
     
-    def record(self, interval: float, destination: AudioData = None):
+    def stop_recording(self):
+        pass
+    
+    def record(self, interval: float = None, destination: AudioData = None):
         do_return = False
+        drop = False
         if destination is None:
             destination = AudioData(self.sample_width)
             do_return = True
@@ -107,14 +112,25 @@ class Microphone:
         stream.start_stream()
 
         start_time = time.perf_counter()
-        while time.perf_counter() - start_time < interval:
-            time.sleep(0.1)  # Prevent high CPU usage
+        if interval is not None:
+            while time.perf_counter() - start_time < interval:
+                time.sleep(0.1)  # Prevent high CPU usage
+        else:
+            while True:
+                event = keyboard.read_event()
+                if event and event.event_type == keyboard.KEY_DOWN:
+                    if event.name == "enter":
+                        break
+                    elif event.name == "backspace":
+                        drop = True
 
         stream.stop_stream()
         stream.close()
 
-        if do_return:
+        if do_return and not drop:
             return destination
+        else:
+            return None
     
     def __del__(self):
         self.pyaudio.terminate()
