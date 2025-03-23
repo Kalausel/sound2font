@@ -1,7 +1,7 @@
 import time
 import wave
-import keyboard
 from pyaudio import PyAudio, paInt16, paContinue
+from pynput import keyboard
 
 MIC_DEFAULTS = {
     "rate": 44100,
@@ -88,12 +88,9 @@ class Microphone:
         self.pyaudio = PyAudio()
         self.sample_width = self.pyaudio.get_sample_size(self.kwargs['format'])
     
-    def stop_recording(self):
-        pass
-    
     def record(self, interval: float = None, destination: AudioData = None):
         do_return = False
-        drop = False
+        self.discard = False
         if destination is None:
             destination = AudioData(self.sample_width)
             do_return = True
@@ -112,22 +109,33 @@ class Microphone:
         stream.start_stream()
 
         start_time = time.perf_counter()
+
         if interval is not None:
             while time.perf_counter() - start_time < interval:
                 time.sleep(0.1)  # Prevent high CPU usage
         else:
-            while True:
-                event = keyboard.read_event()
-                if event and event.event_type == keyboard.KEY_DOWN:
-                    if event.name == "enter":
-                        break
-                    elif event.name == "backspace":
-                        drop = True
+            def key_callback(key, injected):
+                if key == keyboard.Key.esc:
+                    self.discard = True
+                    return False # Stops the listener
+                elif key == keyboard.Key.enter:
+                    return False
+
+            with keyboard.Listener(on_press=key_callback) as listener:
+                listener.join()
+
+                # The below would be nice, but it requires root privileges.
+                # event = keyboard.read_event()
+                # if event and event.event_type == keyboard.KEY_DOWN:
+                #     if event.name == "enter":
+                #         break
+                #     elif event.name == "backspace":
+                #         discard = True
 
         stream.stop_stream()
         stream.close()
 
-        if do_return and not drop:
+        if do_return and not self.discard:
             return destination
         else:
             return None
