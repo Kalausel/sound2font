@@ -3,3 +3,8 @@ notes
 scrapbook.ipynb
 __pycache__/
 test/__pycache__/
+The_setup_story
+build/
+*.egg-info/
+dist/
+*.dist-info/
