@@ -1,7 +1,8 @@
 from warnings import warn
 import json
 
-from sound2font.writemodule import Alphabet, GCode, PEN, DISCONNECTED_CHARS, PUNCTS, cubicbezier2gcode
+from sound2font.textmodule import DISCONNECTED_CHARS, PUNCTS
+from sound2font.writemodule import Alphabet, GCode, PEN, cubicbezier2gcode
 
 class Text2Font:
     # Origin at top left

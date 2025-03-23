@@ -1,5 +1,8 @@
 from recasepunc.recasepunc import CasePuncPredictor, punctuation, punctuation_syms
 
+DISCONNECTED_CHARS = [".", ",", "!", "-", "'", "?", ":", ";"]
+PUNCTS = ['.', '!', ',', '\'', '?']
+
 class GrammarAdder:
 
     def __init__(self, model_path: str, language: str):

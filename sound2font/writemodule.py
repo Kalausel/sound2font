@@ -5,15 +5,13 @@ from matplotlib.path import Path
 from matplotlib import pyplot as plt
 import numpy as np
 
+from sound2font.textmodule import DISCONNECTED_CHARS, PUNCTS
+
 PEN = {
     "UP": "G0 Z1",
     "DOWN": "G0 Z0",
     "PAUSE": "M7"
 }
-
-DISCONNECTED_CHARS = [".", ",", "!", "-", "'", "?", ":", ";"]
-
-PUNCTS = ['.', '!', ',', '\'']
 
 COORDS = ["X", "Y", "I", "J", "P", "Q"]
 
