@@ -8,8 +8,8 @@ import numpy as np
 from sound2font.textmodule import DISCONNECTED_CHARS, PUNCTS
 
 PEN = {
-    "UP": "G0 Z1",
-    "DOWN": "G0 Z0",
+    "UP": "G0 Z0",
+    "DOWN": "G0 Z7",
     "PAUSE": "M7"
 }
 
@@ -74,7 +74,7 @@ def circle_max(line: str, coord: str, start: tuple[float]) -> float:
     if not line.startswith('G2') and not line.startswith('G3'):
         raise ValueError(f"circle_max: Expecting line that starts with 'G2' or 'G3'. Got {line}")
     start = np.array(start)
-    center = np.array([get_coordinate(line, "I"), get_coordinate(line, "J")])
+    center = start + np.array([get_coordinate(line, "I"), get_coordinate(line, "J")])
     end = np.array([get_coordinate(line, "X"), get_coordinate(line, "Y")])
     radius = np.linalg.norm(start - center)
     thetas = [np.atan2(*np.flip(start-center)), np.atan2(*np.flip(end-center))]
@@ -101,6 +101,44 @@ def cubicbezier2gcode(start: 'np.array|list', end: 'np.array|list', start_angle:
     p12 = distance * curvature[0] * np.array([np.cos(start_angle), np.sin(start_angle)])
     p43 = (-1) * distance * curvature[1] * np.array([np.cos(end_angle), np.sin(end_angle)])
     return GCode(f"G5 I{p12[0]} J{p12[1]} P{p43[0]} Q{p43[1]} X{end[0]} Y{end[1]}")
+
+def arc2g1(start: tuple[float], line: str, interval: float = 0.1) -> str:
+    if not line.startswith('G2') and not line.startswith('G3'):
+        raise ValueError(f"circle_max: Expecting line that starts with 'G2' or 'G3'. Got {line}")
+    start = np.array(start)
+    center = start + np.array([get_coordinate(line, "I"), get_coordinate(line, "J")])
+    end = np.array([get_coordinate(line, "X"), get_coordinate(line, "Y")])
+    radius = np.linalg.norm(start - center)
+    thetas = [np.atan2(*np.flip(start-center)), np.atan2(*np.flip(end-center))] # Angles in the interval [-pi, pi)
+    if line.startswith('G2'): # If clockwise, make it counterclockwise.
+        thetas = [x for x in reversed(thetas)]
+    arc_length = radius * np.abs(thetas[1] - thetas[0])
+    num_steps = int(arc_length / interval)
+    out_str = ""
+    for i in range(num_steps):
+        t = i / num_steps
+        theta = thetas[0] + t * thetas[1]
+        x = center[0] + radius * np.cos(theta)
+        y = center[1] + radius * np.sin(theta)
+        out_str += f"G1 X{x} Y{y}\n"
+    out_str += f"G1 X{end[0]} Y{end[1]}"
+    return out_str
+
+def bezier2g1(start: tuple[float], line: str, interval: float = 0.1) -> str:
+    p12 = np.array([get_coordinate(line, "I"), get_coordinate(line, "J")])
+    p43 = np.array([get_coordinate(line, "P"), get_coordinate(line, "Q")])
+    start = np.array([start[0], start[1]])
+    end = np.array([get_coordinate(line, "X"), get_coordinate(line, "Y")])
+    P = [start, start + p12, end + p43, end]
+    num_steps = int(np.linalg.norm(end - start) / interval) # bad approximation
+    out_str = ""
+    for t in np.linspace(0, 1, num_steps):
+        vector = (1 - t)**3 * P[0] + 3 * (1 - t)**2 * t * P[1] + 3 * (1 - t) * t**2 * P[2] + t**3 * P[3]
+        x = vector[0]
+        y = vector[1]
+        out_str += f"G1 X{x} Y{y}\n"
+    out_str += f"G1 X{end[0]} Y{end[1]}"
+    return out_str
 
 class GCode:
     # This class stores Gcode commands.
@@ -164,8 +202,8 @@ class GCode:
             elif line.startswith("G2") or line.startswith("G3"):
                 style =  "-"
                 col = "b" if pen_down else "r"
-                center = np.array([get_coordinate(line, "I"), get_coordinate(line, "J")])
                 start = np.array([last_x, last_y])
+                center = start + np.array([get_coordinate(line, "I"), get_coordinate(line, "J")])
                 end = np.array([get_coordinate(line, "X"), get_coordinate(line, "Y")])
                 radius = np.linalg.norm(start - center)
                 thetas = [np.atan2(*np.flip(start-center)), np.atan2(*np.flip(end-center))]
@@ -227,11 +265,11 @@ class GCode:
             if line[0:2] in ["G0", "G1", "G2", "G3", "G5"]:
                 new_line = line
                 for coord in COORDS:
-                    if line[0:2] == "G5" and coord not in ["X", "Y"]:
-                        # In Bezier curves, I, J, P, Q are relative vectors, hence shall not be translated.
+                    if line[0:2] in ["G2", "G3", "G5"] and coord not in ["X", "Y"]:
+                        # In arcs and Bezier curves, I, J, P, Q are relative vectors, hence shall not be translated.
                         continue
                     old = get_coordinate(line, coord)
-                    i = 0 if coord in ["X", "I"] else 1
+                    i = 0 if coord == "X" else 1
                     new_line = replace_coordinate(new_line, coord, old + vector[i] if old is not None else "dummy")
                 new_commandstr += new_line + "\n"
             else:
@@ -300,7 +338,64 @@ class GCode:
                 commented[idx] = add_coordinate(commented[idx], coord, value)
         commented = [PEN["DOWN"] if line == 'PENDOWN' else PEN['UP'] if line == 'PENUP' else line for line in commented]
         self.commandstr = "\n".join(x for x in commented)
-        
+    
+    def rotate(self, angle: float, inplace: bool = False) -> None:
+        # Rotate the Gcode around the center point by angle degrees. Counterclockwise.
+        # The center point is (0,0)
+        angle = angle * np.pi / 180
+        new_commandstr = ""
+        for line in self.commandstr.split("\n"):
+            if line[0:2] in ["G0", "G1", "G2", "G3", "G5"]:
+                new_line = line
+                old_coords = {}
+                for coord in COORDS:
+                    old = get_coordinate(line, coord)
+                    if old is not None:
+                        old_coords[coord] = old
+                for coord in old_coords.keys():
+                    if coord in ["X", "I", "P"]:
+                        correspondent = "Y" if coord == "X" else "J" if coord == "I" else "Q"
+                        new_coord = old_coords[coord] * np.cos(angle) - old_coords[correspondent] * np.sin(angle)
+                    elif coord in ["Y", "J", "Q"]:
+                        correspondent = "X" if coord == "Y" else "I" if coord == "J" else "P"
+                        new_coord = old_coords[correspondent] * np.sin(angle) + old_coords[coord] * np.cos(angle)
+                    new_line = replace_coordinate(new_line, coord, new_coord)
+                new_commandstr += new_line + "\n"
+            else:
+                new_commandstr += line + "\n"
+        if inplace:
+            self.commandstr = new_commandstr
+        else:
+            return self.__class__(new_commandstr)
+    
+    def curves2g1(self, interval: float = 0.1, inplace: bool = False) -> None:
+        # Replaces G2 and G3 commands with G1 commands.
+        first = True
+        new_commandstr = ""
+        for line in self.commandstr.split("\n"):
+            if line[0:2] in ["G0", "G1", "G2", "G3", "G5"] and line[0:2] not in [PEN["UP"], PEN["DOWN"]]:
+                if first:
+                    # First line must be G0 or G1.
+                    if line[0:2] not in ["G0", "G1"]:
+                        raise ValueError("The first Gcode command must be G0 or G1.")
+                    start = np.array([get_coordinate(line, "X"), get_coordinate(line, "Y")])
+                    if start[0] is None or start[1] is None:
+                        raise ValueError("The first G0 or G1 command must have X and Y coordinates.")
+                    first = False
+                if line[0:2] in ["G2", "G3"]:
+                    new_commandstr += arc2g1(start, line, interval) + "\n"
+                elif line[0:2] == "G5":
+                    new_commandstr += bezier2g1(start, line, interval) + "\n"
+                else:
+                    new_commandstr += line + "\n"
+                new_x = get_coordinate(line, "X")
+                new_y = get_coordinate(line, "Y")
+                start = np.array([new_x if new_x is not None else start[0], new_y if new_y is not None else start[1]])
+        if inplace:
+            self.commandstr = new_commandstr
+        else:
+            return self.__class__(new_commandstr)
+
 
     def append(self, other: "GCode", inplace: bool = True):
         if inplace:
