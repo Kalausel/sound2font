@@ -587,6 +587,11 @@ class Alphabet:
         with open(path, "w") as f:
             json.dump(self.symbols, f)
     
+    def save_strings(self, path: str):
+        with open(path, "w") as f:
+            str_dict = {key: self.symbols[key].gcode.commandstr for key in self.symbols}
+            json.dump(str_dict, f)
+    
     @classmethod
     def load(cls, path: str):
         with open(path, "r") as f:

@@ -36,9 +36,9 @@ class Text2Font:
         self.font_path = font_path
         self.connected = connected
         if string_alphabet:
-            self.alphabet = Alphabet.load_from_string_dict(font_path)
+            self.alphabet = Alphabet.load_from_string_dict(self.font_path)
         else:
-            self.alphabet = Alphabet.load(font_path)
+            self.alphabet = Alphabet.load(self.font_path)
         self.alphabet.resize(font_size)
         self.pen_down = False
 
