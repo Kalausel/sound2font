@@ -110,14 +110,16 @@ def arc2g1(start: tuple[float], line: str, interval: float = 0.1) -> str:
     end = np.array([get_coordinate(line, "X"), get_coordinate(line, "Y")])
     radius = np.linalg.norm(start - center)
     thetas = [np.atan2(*np.flip(start-center)), np.atan2(*np.flip(end-center))] # Angles in the interval [-pi, pi)
-    if line.startswith('G2'): # If clockwise, make it counterclockwise.
-        thetas = [x for x in reversed(thetas)]
+    if line.startswith('G2') and thetas[0] < thetas[1]:
+        thetas[0] += 2 * np.pi
+    elif line.startswith('G3') and thetas[0] > thetas[1]:
+        thetas[1] += 2 * np.pi
     arc_length = radius * np.abs(thetas[1] - thetas[0])
     num_steps = int(arc_length / interval)
     out_str = ""
     for i in range(num_steps):
         t = i / num_steps
-        theta = thetas[0] + t * thetas[1]
+        theta = thetas[0] + t * (thetas[1] - thetas[0])
         x = center[0] + radius * np.cos(theta)
         y = center[1] + radius * np.sin(theta)
         out_str += f"G1 X{x} Y{y}\n"
@@ -129,10 +131,18 @@ def bezier2g1(start: tuple[float], line: str, interval: float = 0.1) -> str:
     p43 = np.array([get_coordinate(line, "P"), get_coordinate(line, "Q")])
     start = np.array([start[0], start[1]])
     end = np.array([get_coordinate(line, "X"), get_coordinate(line, "Y")])
+    p23 = end + p43 - start - p12
     P = [start, start + p12, end + p43, end]
-    num_steps = int(np.linalg.norm(end - start) / interval) # bad approximation
+    max_steps = int((np.linalg.norm(p12) + np.linalg.norm(p43) + np.linalg.norm(p23)) / interval) + 1 # This should always be longer than the curve.
     out_str = ""
-    for t in np.linspace(0, 1, num_steps):
+    t = 0
+    for i in range(max_steps):
+        if i == max_steps - 1:
+            warn(f"bezier2g1: Reached maximum number of steps ({max_steps}).")
+        dx_dt = np.linalg.norm(3 * ((1 - t)**2 * (P[1] - P[0]) + 2 * t * (1 - t) * (P[2] - P[1]) + t**2 * (P[3] - P[2])))
+        t += interval / dx_dt
+        if t > 1:
+            break
         vector = (1 - t)**3 * P[0] + 3 * (1 - t)**2 * t * P[1] + 3 * (1 - t) * t**2 * P[2] + t**3 * P[3]
         x = vector[0]
         y = vector[1]
@@ -345,7 +355,7 @@ class GCode:
         angle = angle * np.pi / 180
         new_commandstr = ""
         for line in self.commandstr.split("\n"):
-            if line[0:2] in ["G0", "G1", "G2", "G3", "G5"]:
+            if line[0:2] in ["G0", "G1", "G2", "G3", "G5"] and not line in [PEN["UP"], PEN["DOWN"]]:
                 new_line = line
                 old_coords = {}
                 for coord in COORDS:
@@ -373,7 +383,7 @@ class GCode:
         first = True
         new_commandstr = ""
         for line in self.commandstr.split("\n"):
-            if line[0:2] in ["G0", "G1", "G2", "G3", "G5"] and line[0:2] not in [PEN["UP"], PEN["DOWN"]]:
+            if line[0:2] in ["G0", "G1", "G2", "G3", "G5"] and not line in [PEN["UP"], PEN["DOWN"]]:
                 if first:
                     # First line must be G0 or G1.
                     if line[0:2] not in ["G0", "G1"]:
@@ -391,6 +401,8 @@ class GCode:
                 new_x = get_coordinate(line, "X")
                 new_y = get_coordinate(line, "Y")
                 start = np.array([new_x if new_x is not None else start[0], new_y if new_y is not None else start[1]])
+            else:
+                new_commandstr += line + "\n"
         if inplace:
             self.commandstr = new_commandstr
         else:
