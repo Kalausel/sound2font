@@ -289,6 +289,34 @@ class GCode:
         else:
             return self.__class__(new_commandstr)
     
+    def pure_code_str(self):
+        # Remove empty lines and comments.
+        rm_ids = []
+        unclean = self.get_lines()
+        for i, line in enumerate(unclean):
+            if line.startswith("#") or line == "":
+                rm_ids.append(i)
+        clean = [x for i, x in enumerate(unclean) if not i in rm_ids]
+        return "\n".join(clean)
+    
+    def check_limits(self, x_limits: tuple[float], y_limits: tuple[float]):
+        for line in self.get_lines():
+            if line.startswith("#") or line == "":
+                continue
+            x = get_coordinate(line, "X")
+            y = get_coordinate(line, "Y")
+            if x is not None and (x < x_limits[0] or x > x_limits[1]):
+                raise ValueError(f"X coordinate {x} out of limits {x_limits}.")
+            if y is not None and (y < y_limits[0] or y > y_limits[1]):
+                raise ValueError(f"Y coordinate {y} out of limits {y_limits}.")
+    
+    def split_pages(self):
+        # Split the Gcode into pages. A page is defined by a PEN["PAUSE"] command.
+        # Returns a list of GCode objects.
+        commandstr_list = self.commandstr.split(PEN["PAUSE"])
+        gcode_list = [GCode(x) for x in commandstr_list]
+        return gcode_list
+
     def clean(self):
         # Comment instead of remove.
         # 1) Remove PENUP if already up and PENDOWN if already down.
@@ -457,9 +485,12 @@ class GCode:
                         result = False
         return result
 
-    def save(self, path: str):
+    def save(self, path: str, pure: bool = False):
         with open(path, "w") as f:
-            f.write(self.commandstr)
+            if pure:
+                f.write(self.pure_code_str())
+            else:
+                f.write(self.commandstr)
     
     @classmethod
     def load(cls, path: str):
