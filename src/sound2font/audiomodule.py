@@ -1,7 +1,7 @@
 import time
 import wave
 from pyaudio import PyAudio, paInt16, paContinue
-from pynput import keyboard
+#from pynput import keyboard
 
 MIC_DEFAULTS = {
     "rate": 44100,
@@ -114,6 +114,10 @@ class Microphone:
             while time.perf_counter() - start_time < interval:
                 time.sleep(0.1)  # Prevent high CPU usage
         else:
+            selection = input("Press 'Enter' to print.\nPress 'Esc' to discard...")
+            self.discard = not (selection == '')
+            """
+            # The below worked well from iPython, but not from the terminal.
             def key_callback(key, injected):
                 if key == keyboard.Key.esc:
                     self.discard = True
@@ -123,6 +127,7 @@ class Microphone:
 
             with keyboard.Listener(on_press=key_callback) as listener:
                 listener.join()
+            """
 
                 # The below would be nice, but it requires root privileges.
                 # event = keyboard.read_event()

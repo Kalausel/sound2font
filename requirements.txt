@@ -2,5 +2,5 @@ vosk
 pyaudio
 wave
 matplotlib
-pynput
+#pynput
 git+https://github.com/Kalausel/recasepunc.git

@@ -24,7 +24,7 @@ class Text2Font:
             self.initial_position = (0, height - font_size) # Lower edge of first line
         else:
             self.initial_position = initial_position
-        # self.current_position is changes in Y only integer lines.
+        # self.current_position changes in Y only by integer lines.
         self.current_position = self.initial_position
         self.char_spacing = char_spacing
         if self.char_spacing == 0 and punct_spacing is None:
@@ -51,13 +51,16 @@ class Text2Font:
         gcode = GCode(PEN["UP"]) # Make sure that the pen is up at the start.
         gcode.add_command(f"G0 X{self.current_position[0]} Y{self.current_position[1]}", comment="Move to initial position")
         for i, paragraph in enumerate(text.split("\n")):
+            if paragraph == "NEWPAGE":
+                gcode.add_command(self.new_page().commandstr, comment="New page because of user input")
+                continue
             if paragraph == "":
                 # Triggers, when paragraph starts or ends with '\n'.
                 gcode.add_command(self.new_line().commandstr, comment="New line because start of explicit newline character")
                 continue
             if i != 0:
                 gcode.add_command(self.new_line().commandstr, comment="New line because start of new paragraph") # Changes self.current_position and adds G0 move.
-            for j, word in enumerate(paragraph.split(" ")):
+            for j, word in enumerate(paragraph.split(" ")): # Punctuation signs are part of the preceding word, if there is no space before it.
                 # Add a space before every word.
                 # If the paragraph starts with a space, or ends with a space, this is caught by word == "".
                 # A space will be added accordingly.
@@ -88,7 +91,7 @@ class Text2Font:
         gcode = GCode("")
         required_space = sum([self.alphabet.symbols[char].width + self.char_spacing for char in word])
         available_space = self.width - self.current_position[0]
-        # If the first word in the paragraph does not fit in the line,
+        # If the first word in the paragraph (line?) does not fit in the line,
         # the word will be split up rather than a new line added.
         if available_space >= required_space or first_word:
             pass
@@ -173,7 +176,7 @@ class Text2Font:
     def new_page(self):
         self.current_position = (0, self.height - self.font_size)
         self.pen_down = False
-        return GCode(PEN['UP'] + f"\nG0 X0 Y{self.current_position[1]}\n" + PEN['PAUSE'])
+        return GCode(PEN['UP'] + f"\nG0 X0 Y{self.current_position[1]}\n" + PEN['PAUSE'] + "\n" + f"\nG0 X0 Y{self.current_position[1]}\n")
 
     def reset_cursor(self):
         self.current_position = (0, self.height - self.font_size)

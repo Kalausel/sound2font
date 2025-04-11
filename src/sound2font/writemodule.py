@@ -376,8 +376,34 @@ class GCode:
                 commented[idx] = add_coordinate(commented[idx], coord, value)
         commented = [PEN["DOWN"] if line == 'PENDOWN' else PEN['UP'] if line == 'PENUP' else line for line in commented]
         self.commandstr = "\n".join(x for x in commented)
-    
-    def rotate(self, angle: float, inplace: bool = False) -> None:
+
+    def invert_coordinate(self, direction: int, inplace: bool = False) -> "GCode":
+        # One variable is mirrored along the other axis.
+        new_commandstr = ""
+        for line in self.commandstr.split("\n"):
+            if line[0:2] in ["G0", "G1", "G2", "G3", "G5"] and not line in [PEN["UP"], PEN["DOWN"]]:
+                new_line = line
+                old_coords = {}
+                for coord in COORDS:
+                    old = get_coordinate(line, coord)
+                    if old is not None:
+                        old_coords[coord] = old
+                for coord in old_coords.keys():
+                    new_coord = old_coords[coord]
+                    if direction == 0 and coord in ["X", "I", "P"]:
+                        new_coord = (-1) * old_coords[coord]
+                    elif direction == 1 and coord in ["Y", "J", "Q"]:
+                        new_coord = old_coords[correspondent] * np.sin(angle) + old_coords[coord] * np.cos(angle)
+                    new_line = replace_coordinate(new_line, coord, new_coord)
+                new_commandstr += new_line + "\n"
+            else:
+                new_commandstr += line + "\n"
+        if inplace:
+            self.commandstr = new_commandstr
+        else:
+            return self.__class__(new_commandstr)
+
+    def rotate(self, angle: float, inplace: bool = False) -> "GCode":
         # Rotate the Gcode around the center point by angle degrees. Counterclockwise.
         # The center point is (0,0)
         angle = angle * np.pi / 180
@@ -393,12 +419,21 @@ class GCode:
                 for coord in old_coords.keys():
                     if coord in ["X", "I", "P"]:
                         correspondent = "Y" if coord == "X" else "J" if coord == "I" else "Q"
-                        new_coord = old_coords[coord] * np.cos(angle) - old_coords[correspondent] * np.sin(angle)
+                        old_correspondent = old_coords[correspondent] if correspondent in old_coords else carry[correspondent]
+                        new_coord = old_coords[coord] * np.cos(angle) - old_correspondent * np.sin(angle)
+                        if not correspondent in old_coords:
+                            new_correspondent = old_coords[coord] * np.sin(angle) - carry[correspondent] * np.cos(angle)
+                            new_line = add_coordinate(new_line, correspondent, new_correspondent)
                     elif coord in ["Y", "J", "Q"]:
                         correspondent = "X" if coord == "Y" else "I" if coord == "J" else "P"
-                        new_coord = old_coords[correspondent] * np.sin(angle) + old_coords[coord] * np.cos(angle)
+                        old_correspondent = old_coords[correspondent] if correspondent in old_coords else carry[correspondent]
+                        new_coord = old_correspondent * np.sin(angle) + old_coords[coord] * np.cos(angle)
+                        if not correspondent in old_coords:
+                            new_correspondent = carry[correspondent] * np.cos(angle) - old_coords[coord] * np.sin(angle)
+                            new_line = add_coordinate(new_line, correspondent, new_correspondent)
                     new_line = replace_coordinate(new_line, coord, new_coord)
                 new_commandstr += new_line + "\n"
+                carry = {co: old_coords[co] if co in old_coords else carry[co] for co in ["X", "Y"]}
             else:
                 new_commandstr += line + "\n"
         if inplace:

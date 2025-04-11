@@ -16,7 +16,7 @@ setup(
         "pyaudio",
         "wave",
         "matplotlib",
-        "pynput",
+        #"pynput",
         "recasepunc @ git+https://github.com/Kalausel/recasepunc.git"
     ],
     classifiers=[
