@@ -34,7 +34,7 @@ class TextData:
         self.vosk_result = vosk_result
     
     def text(self):
-        if "text" in self.vosk_result:
+        if len(self.vosk_result) > 12:
             return self.vosk_result.split('text" : "')[1][:-3]
         else:
             return ""
