@@ -34,5 +34,8 @@ class TextData:
         self.vosk_result = vosk_result
     
     def text(self):
-        return self.vosk_result.split('text" : "')[1][:-3]
+        if "text" in self.vosk_result:
+            return self.vosk_result.split('text" : "')[1][:-3]
+        else:
+            return ""
     

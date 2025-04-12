@@ -50,6 +50,8 @@ class Text2Font:
         """
         gcode = GCode(PEN["UP"]) # Make sure that the pen is up at the start.
         gcode.add_command(f"G0 X{self.current_position[0]} Y{self.current_position[1]}", comment="Move to initial position")
+        if text == "":
+            return gcode
         for i, paragraph in enumerate(text.split("\n")):
             if paragraph == "NEWPAGE":
                 gcode.add_command(self.new_page().commandstr, comment="New page because of user input")
