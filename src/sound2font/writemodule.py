@@ -269,7 +269,7 @@ class GCode:
         if return_axes:
             return axes
     
-    def add_feed_rate(feed_rate: float, inplace: bool = False, overwrite: bool = False) -> None:
+    def add_feed_rate(self, feed_rate: float, inplace: bool = False, overwrite: bool = False) -> None:
         # Add feed rate to every G1 command to avoid grbl error 22.
         new_commandstr = ""
         for line in self.commandstr.split("\n"):
