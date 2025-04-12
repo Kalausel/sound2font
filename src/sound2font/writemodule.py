@@ -268,6 +268,27 @@ class GCode:
             plt.show()
         if return_axes:
             return axes
+    
+    def add_feed_rate(feed_rate: float, inplace: bool = False, overwrite: bool = False) -> None:
+        # Add feed rate to every G1 command to avoid grbl error 22.
+        new_commandstr = ""
+        for line in self.commandstr.split("\n"):
+            if line.startswith("G1"):
+                new_line = line
+                if "F" not in line:
+                    new_line += f" F{feed_rate}"
+                elif overwrite:
+                    raise NotImplementedError("Overwriting previously defined feed rate not implemented.")
+                    #new_line = replace_coordinate(new_line, "F", feed_rate)
+                else:
+                    pass
+                new_commandstr += new_line + "\n"
+            else:
+                new_commandstr += line + "\n"
+        if inplace:
+            self.commandstr = new_commandstr
+        else:
+            return self.__class__(new_commandstr)
 
     def translate(self, vector: tuple[float], inplace: bool = False) -> None:
         new_commandstr = ""
