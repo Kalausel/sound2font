@@ -16,6 +16,9 @@ setup(
         "pyaudio",
         "wave",
         "matplotlib",
+        "torchaudio",
+        "soundfile",
+        "faster-whisper",
         #"pynput",
         "recasepunc @ git+https://github.com/Kalausel/recasepunc.git"
     ],

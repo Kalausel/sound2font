@@ -1,12 +1,18 @@
 import os
+import numpy as np
+import io
+import soundfile as sf
+from sound2font.audiomodule import MIC_DEFAULTS
 
 from vosk import BatchModel, BatchRecognizer, Model, KaldiRecognizer
 # KaldiRecognizer does real-time transcription. Potentially faster, less accurate.
 
+from faster_whisper import WhisperModel
+
 from sound2font.textmodule import TextData
 from sound2font.audiomodule import AudioData
 
-class Speech2Text:
+class Speech2Text_vosk:
     def __init__(self, model_path: str, sample_rate: int
                  , model_type: str = "kaldi"):
         self.model_path = model_path
@@ -29,3 +35,20 @@ class Speech2Text:
     def transcribe(self, audio_data: AudioData) -> TextData:
         self.recognizer.AcceptWaveform(audio_data.as_bytes())
         return TextData(self.recognizer.Result())
+
+class Speech2Text_fw:
+    def __init__(self, model_size: str = "tiny", sample_rate: int = MIC_DEFAULTS["rate"]):
+        if model_size not in ["tiny", "base"]:
+            raise ValueError(f"Model size {model_size} must be one of 'tiny' and 'base'.")
+        self.model = WhisperModel(model_size, compute_type="int8", threads=os.cpu_count()-1)
+        self.sample_rate = sample_rate
+    
+    def transcribe(self, audio_data: AudioData) -> TextData:
+        audio_np = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
+        buffer = io.BytesIO()
+        sf.write(buffer, audio_np, samplerate=self.sample_rate, format="WAV")
+        buffer.seek(0)
+        segments, info = self.model.transcribe(buffer)
+        return TextData("".join([segment.text for segment in segments]))
+
+Speech2Text = Speech2Text_vosk
