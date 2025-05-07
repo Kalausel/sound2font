@@ -491,6 +491,15 @@ class GCode:
             self.commandstr = new_commandstr
         else:
             return self.__class__(new_commandstr)
+    
+    def last_position(self):
+        x = None
+        y = None
+        for line in self.get_lines():
+            if line[0:2] in ["G0", "G1", "G2", "G3", "G5"] and not line in [PEN["UP"], PEN["DOWN"]]:
+                x = get_coordinate(line, "X")
+                y = get_coordinate(line, "Y")
+        return (x, y)
 
 
     def append(self, other: "GCode", inplace: bool = True):
