@@ -9,7 +9,7 @@ from vosk import BatchModel, BatchRecognizer, Model, KaldiRecognizer
 
 from faster_whisper import WhisperModel
 
-from sound2font.textmodule import TextData
+from sound2font.textmodule import TextData, TextData_fw
 from sound2font.audiomodule import AudioData
 
 class Speech2Text_vosk:
@@ -49,6 +49,6 @@ class Speech2Text_fw:
         sf.write(buffer, audio_np, samplerate=self.sample_rate, format="WAV")
         buffer.seek(0)
         segments, info = self.model.transcribe(buffer)
-        return TextData("".join([segment.text for segment in segments]))
+        return TextData_fw("".join([segment.text for segment in segments]))
 
 Speech2Text = Speech2Text_vosk

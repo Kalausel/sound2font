@@ -38,4 +38,11 @@ class TextData:
             return self.vosk_result.split('text" : "')[1][:-3]
         else:
             return ""
+
+class TextData_fw:
+    def __init__(self, fw_result: str):
+        super().__init__()
+        self.fw_result = fw_result
     
+    def text(self):
+        return self.fw_result
