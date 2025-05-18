@@ -38,8 +38,8 @@ class Speech2Text_vosk:
 
 class Speech2Text_fw:
     def __init__(self, model_size: str = "tiny", sample_rate: int = MIC_DEFAULTS["rate"]):
-        if model_size not in ["tiny", "base"]:
-            raise ValueError(f"Model size {model_size} must be one of 'tiny' and 'base'.")
+        if model_size not in ["tiny", "base", "small"]:
+            raise ValueError(f"Model size {model_size} must be one of 'tiny' and 'base' and 'small'.")
         self.model = WhisperModel(model_size, compute_type="int8", cpu_threads=os.cpu_count()-1)
         self.sample_rate = sample_rate
     
