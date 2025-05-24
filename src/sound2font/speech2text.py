@@ -37,7 +37,11 @@ class Speech2Text_vosk:
         return TextData(self.recognizer.Result())
 
 class Speech2Text_fw:
-    def __init__(self, model_size: str = "tiny", sample_rate: int = MIC_DEFAULTS["rate"]):
+    def __init__(self, model_size: str = "tiny", sample_rate: int = MIC_DEFAULTS["rate"], language: str = "en"):
+        self.language = language
+        if not self.language in ["en", "de"]:
+            raise ValueError(f"Got language {self.language}.\n" + \
+                             "Available languages: 'en', 'de'")
         if model_size not in ["tiny", "base", "small"]:
             raise ValueError(f"Model size {model_size} must be one of 'tiny' and 'base' and 'small'.")
         self.model = WhisperModel(model_size, compute_type="int8", cpu_threads=os.cpu_count()-1)
@@ -48,7 +52,7 @@ class Speech2Text_fw:
         buffer = io.BytesIO()
         sf.write(buffer, audio_np, samplerate=self.sample_rate, format="WAV")
         buffer.seek(0)
-        segments, info = self.model.transcribe(buffer)
+        segments, info = self.model.transcribe(buffer, language=self.language)
         return TextData_fw("".join([segment.text for segment in segments]))
 
 Speech2Text = Speech2Text_vosk
