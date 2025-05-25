@@ -90,6 +90,9 @@ class Text2Font:
         # 2) Check whether to start a new page.
         # 3) Add gcode accordingly.
         # This does not add spaces. These are treated as characters.
+        for i, char in enumerate(word):
+            if char not in self.alphabet.symbols:
+                word.replace(char, "?")
         gcode = GCode("")
         required_space = sum([self.alphabet.symbols[char].width + self.char_spacing for char in word])
         available_space = self.width - self.current_position[0]
@@ -106,8 +109,6 @@ class Text2Font:
         for char in word:
             # Adds GCode and changes current position both until beginning of new char.
             # In the case of connected fonts, this is the end of the current char.
-            if not char in self.alphabet.symbols:
-                char = "?"
             gcode.add_command(self.gcode_and_move_cursor(char, last_char=last_char), comment=f"Char {char}")
             last_char = char
         if self.connected: # Otherwise, PENUP is already added in self.gcode_and_move_cursor().
