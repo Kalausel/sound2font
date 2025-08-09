@@ -13,6 +13,7 @@ from sound2font.textmodule import TextData, TextData_fw
 from sound2font.audiomodule import AudioData
 
 class Speech2Text_vosk:
+    # Vosk needs the path to a model checkpoint, and different parameters than faster_whisper.
     def __init__(self, model_path: str, sample_rate: int
                  , model_type: str = "kaldi"):
         self.model_path = model_path
@@ -37,12 +38,16 @@ class Speech2Text_vosk:
         return TextData(self.recognizer.Result())
 
 class Speech2Text_fw:
+    # faster_whisper stores its models automatically.
+    # Works offline, once the model is downloaded once.
     def __init__(self, model_size: str = "tiny", sample_rate: int = MIC_DEFAULTS["rate"], language: str = "en"):
         self.language = language
         if not self.language in ["en", "de"]:
             raise ValueError(f"Got language {self.language}.\n" + \
                              "Available languages: 'en', 'de'")
         if model_size not in ["tiny", "base", "small"]:
+            # 'base' is a good compromise between speed and accuracy.
+            # 'small' is impossible on my Raspberry Pi.
             raise ValueError(f"Model size {model_size} must be one of 'tiny' and 'base' and 'small'.")
         self.model = WhisperModel(model_size, compute_type="int8", cpu_threads=os.cpu_count()-1)
         self.sample_rate = sample_rate
@@ -55,4 +60,4 @@ class Speech2Text_fw:
         segments, info = self.model.transcribe(buffer, language=self.language)
         return TextData_fw("".join([segment.text for segment in segments]))
 
-Speech2Text = Speech2Text_vosk
+Speech2Text = Speech2Text_vosk # I am using faster_whisper by default now, but I do not want to break the old commented out code.

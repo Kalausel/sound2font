@@ -1,9 +1,16 @@
 from recasepunc.recasepunc import CasePuncPredictor, punctuation, punctuation_syms
 
-DISCONNECTED_CHARS = [".", ",", "!", "-", "'", "?", ":", ";"] + [str(x) for x in range(10)]
-PUNCTS = ['.', '!', ',', '\'', '?']
+# PUNCTS are punctuation characters. They need special treatment.
+PUNCTS = ['.', '!', ',', '?', ":", ";"]
+# DISCONNECTED_CHARS are characters that are not connected to its neighbours, even in a connected font.
+DISCONNECTED_CHARS = PUNCTS + ["-", "'"] + [str(x) for x in range(10)]
 
 class GrammarAdder:
+    """
+    Adds punctuation to an uncapitalised and unpunctuated text.
+    faster_whisper already does this, so it is only needed for vosk.
+    recasepunc is not very accurate, and has a model >1GB for each language.
+    """
 
     def __init__(self, model_path: str, language: str):
         self.punctuator = CasePuncPredictor(model_path, lang=language)
@@ -40,6 +47,8 @@ class TextData:
             return ""
 
 class TextData_fw:
+    # This literally only contains the text as a string, but I want backwards compatibility with vosk
+    # , which returns a more complicated string.
     def __init__(self, fw_result: str):
         super().__init__()
         self.fw_result = fw_result

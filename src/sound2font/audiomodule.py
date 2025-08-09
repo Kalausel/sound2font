@@ -22,6 +22,11 @@ SPEAKER_DEFAULTS = {
 }
 
 class AudioData(bytearray):
+    # Subclass of bytearray.
+    # self.sample_width comes from pyaudio via the Microphone class.
+    # If an extension step in Microphone.record would make AudioData exceed self.max_var_size,
+    # a silent AudioData is returned to avoid memory overflow, e.g. because of a failure to stop the recording.
+
     def __init__(self, sample_width: int, max_var_size: int = 5e7, max_file_size: int = 1e8):
         super().__init__()
         self.max_var_size = max_var_size
@@ -66,7 +71,7 @@ class Speaker:
     def play(self, audio: AudioData):
         if not audio:
             print("Warning: No audio data to play.")
-            return
+            return None
         
         stream = self.pyaudio.open(format=self.kwargs['format'],
                                    channels=self.kwargs['channels'],
@@ -89,6 +94,15 @@ class Microphone:
         self.sample_width = self.pyaudio.get_sample_size(self.kwargs['format'])
     
     def record(self, interval: float = None, destination: AudioData = None):
+        """
+        This method starts recording once it is called.
+        It returns a silent AudioData object if the recording exceeds the memory limit.
+
+        interval:    If given, recording stops after interval seconds.
+                     Otherwise, 'Enter' stops the recording and keeps it. Any other input discards the recording, and returns None.
+        destination: If given, the recorded audio is appended to this AudioData object, and None is returned.
+                     Otherwise, a new AudioData object is created and returned.
+        """
         do_return = False
         self.discard = False
         if destination is None:
@@ -115,6 +129,7 @@ class Microphone:
                 time.sleep(0.1)  # Prevent high CPU usage
         else:
             selection = input("Press 'Enter' to print.\nPress 'Esc' to discard...")
+            # Enter means '' (empty input) because Enter is pressed after the actual input.
             self.discard = not (selection == '')
             """
             # The below worked well from iPython, but not from the terminal.

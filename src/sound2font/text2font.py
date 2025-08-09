@@ -4,22 +4,40 @@ import json
 from sound2font.textmodule import DISCONNECTED_CHARS, PUNCTS
 from sound2font.writemodule import Alphabet, GCode, PEN, cubicbezier2gcode
 
-class Text2Font:
-    # Origin at top left
+KEYWORDS = {'np': 'NEWPAGE'
+            , 'nl': 'NEWLINE'}
 
+class Text2Font:
+    # The coordinates refer to the writable area of one page, i.e. a Page object.
+    # Origin at the bottom left.
+    # The cursor position refers to the bottom left of the area for the next character.
+    # Origin at bottom left
+    # All lengths in mm
+
+    """
+    self.current_position: "Cursor". Always the starting point (bottom left) of the next character.
+    self.pen_down. Tracks the current z-position in the generated GCode.
+    """
     def __init__(self, width: float, height: float
                  , font_path: str, connected: bool
-                 , font_size: float, line_spacing: float
-                 , char_spacing: float = 0
-                 , space_ratio: float = 0.25
-                 , initial_position: tuple[float, float] = None
-                 , string_alphabet: bool = False
-                 , punct_spacing: float = None
+                 , font_size: float # Height of a capital letter
+                 , line_spacing: float # Distance between bottom of upper line and top of lower line.
+                                       # The bottom and top of a line is defined by a capital letter.
+                 , char_spacing: float = 0 # This amount is added after each character (to the
+                                           # character width), if followed by a standard character.
+                 , space_ratio: float = 0.25 # The space will be this wide compared to the font_size.
+                 , initial_position: tuple[float, float] = None # Start writing with the bottom left
+                                                                # of the first character at this position.
+                 , string_alphabet: bool = False # This is the standard way I am storing my alphabets.
+                                                 # Controls, which method is used to load the alphabet.
+                 , punct_spacing: float = None # Distance in front of a punctuation sign.
+                                               # If none, it will effectively be the same as char_spacing.
+                                               # TODO If none, it will be 0.2*font_size.
     ):
         self.width = width
         self.height = height
         self.font_size = font_size
-        self.line_spacing = line_spacing
+        self.line_spacing = line_spacing 
         if initial_position is None:
             self.initial_position = (0, height - font_size) # Lower edge of first line
         else:
@@ -48,11 +66,19 @@ class Text2Font:
         Use Text2font.newline() instead.
         Do not add spaces manually.
         """
+        # 1) Move pen to initial position. (This is already the cursor position.)
         gcode = GCode(PEN["UP"]) # Make sure that the pen is up at the start.
+        self.pen_down = False
         gcode.add_command(f"G0 X{self.current_position[0]} Y{self.current_position[1]}", comment="Move to initial position")
+
+        # 2a) If text is empty, we are done. Return the move to the initial position.
         if text == "":
             return gcode
+        # 2b) Split the input text at each '\n'. If no '\n' is in the text, this will just return the string.
+        #     If '\n occurs at the start (the end), there will be an empty string as the first (the last) element of the list.
+        #     There is no possibility for the string to start or end with '\n'.
         for i, paragraph in enumerate(text.split("\n")):
+            # 3a) If the user input was 'np', the string will read "NEWPAGE".
             if paragraph == "NEWPAGE":
                 gcode.add_command(self.new_page().commandstr, comment="New page because of user input")
                 continue
