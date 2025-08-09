@@ -9,7 +9,7 @@ from sound2font.textmodule import DISCONNECTED_CHARS, PUNCTS
 
 PEN = {
     "UP": "G0 Z0",
-    "DOWN": "G0 Z7",
+    "DOWN": "G0 Z9",
     "PAUSE": "M7"
 }
 
