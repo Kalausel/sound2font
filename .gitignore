@@ -1,4 +1,5 @@
 .venv/
+tests/
 notes
 scrapbook.ipynb
 __pycache__/
