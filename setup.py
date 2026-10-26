@@ -14,7 +14,6 @@ setup(
     install_requires=[
         "vosk",
         "pyaudio",
-        "wave",
         "matplotlib",
         "torchaudio",
         "soundfile",

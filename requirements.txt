@@ -1,6 +1,5 @@
 vosk
 pyaudio
-wave
 matplotlib
 torchaudio
 soundfile
