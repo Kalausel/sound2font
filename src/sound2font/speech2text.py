@@ -4,38 +4,12 @@ import io
 import soundfile as sf
 from sound2font.audiomodule import MIC_DEFAULTS
 
-from vosk import BatchModel, BatchRecognizer, Model, KaldiRecognizer
 # KaldiRecognizer does real-time transcription. Potentially faster, less accurate.
 
 from faster_whisper import WhisperModel
 
 from sound2font.textmodule import TextData, TextData_fw
 from sound2font.audiomodule import AudioData
-
-class Speech2Text_vosk:
-    # Vosk needs the path to a model checkpoint, and different parameters than faster_whisper.
-    def __init__(self, model_path: str, sample_rate: int
-                 , model_type: str = "kaldi"):
-        self.model_path = model_path
-        self.sample_rate = sample_rate
-        if model_type == "batch":
-            model = BatchModel(model_path)
-            self.recognizer = BatchRecognizer(model
-                                            , self.sample_rate
-                                            )
-        elif model_type == "kaldi":
-            model = Model(model_path)
-            self.recognizer = KaldiRecognizer(model
-                                            , self.sample_rate
-                                            )
-        else:
-            raise ValueError(f"Model type {model_type} no recognised.\n" + \
-                             "Available model types: 'batch', 'kaldi'")
-        self.recognizer.SetWords(True)
-
-    def transcribe(self, audio_data: AudioData) -> TextData:
-        self.recognizer.AcceptWaveform(audio_data.as_bytes())
-        return TextData(self.recognizer.Result())
 
 class Speech2Text_fw:
     # faster_whisper stores its models automatically.
@@ -59,5 +33,3 @@ class Speech2Text_fw:
         buffer.seek(0)
         segments, info = self.model.transcribe(buffer, language=self.language)
         return TextData_fw("".join([segment.text for segment in segments]))
-
-Speech2Text = Speech2Text_vosk # I am using faster_whisper by default now, but I do not want to break the old commented out code.
