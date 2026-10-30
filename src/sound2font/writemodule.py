@@ -4,6 +4,7 @@ from matplotlib.patches import Arc, PathPatch
 from matplotlib.path import Path
 from matplotlib import pyplot as plt
 import numpy as np
+from xml.etree.ElementTree import Element, SubElement, ElementTree
 
 from sound2font.textmodule import DISCONNECTED_CHARS, PUNCTS
 
@@ -268,6 +269,49 @@ class GCode:
             plt.show()
         if return_axes:
             return axes
+
+    def write_svg(self, path: str, width: float, height: float, stroke_width: float):
+            # The intended use is for a single page.
+            pen_down = False
+            # Calculate the number of pages needed.
+            no_pages = 1
+            for line in self.get_lines():
+                if line == PEN["PAUSE"]:
+                    no_pages += 1
+            if no_pages > 1:
+                raise NotImplementedError("method write_svg: no_pages > 1. This is not implemented, as it is not the intended use.")
+
+            segments = []
+            last_x, last_y = 0, 0 # The GCode should initially go to the actual initial position in PEN_UP mode.
+            for idx, line in enumerate(self.get_lines()):
+                if line.startswith("#") or line == "":
+                    continue # Ignore comments.
+                elif line == PEN["UP"]:
+                    pen_down = False
+                elif line == PEN["DOWN"]:
+                    pen_down = True
+                elif line.startswith("G1") or line.startswith("G0"):
+                    x = get_coordinate(line, "X")
+                    if x is None:
+                        x = last_x
+                    y = get_coordinate(line, "Y")
+                    if y is None:
+                        y = last_y
+                    if line.startswith('G1') or line.startswith('G0'):
+                        if pen_down:
+                            segments.append((last_x, last_y, x, y))
+                    last_x, last_y = x, y
+                elif line != PEN["PAUSE"]:
+                    print(f"Warning: Unknown Gcode command {line}")
+
+            svg = Element("svg", smlns="http://www.w3.org/2000/svg", viewBox=f"0 0 {width} {height}")
+
+            for x1,y1,x2,y2 in segments:
+                SubElement(svg, "line", x1=str(x1), y1=str(y1), x2=str(x2), y2=str(y2)
+                           , stroke='black', **{"stroke-width": f"{stroke_width}"})
+            ElementTree(svg).write(path)
+                
+            
     
     def add_feed_rate(self, feed_rate: float, inplace: bool = False, overwrite: bool = False) -> None:
         # Add feed rate to every G1 command to avoid grbl error 22.
