@@ -442,7 +442,7 @@ class GCode:
         commented = [PEN["DOWN"] if line == 'PENDOWN' else PEN['UP'] if line == 'PENUP' else line for line in commented]
         self.commandstr = "\n".join(x for x in commented)
 
-    def invert_coordinate(self, direction: int, inplace: bool = False) -> "GCode":
+    def invert_coordinate(self, direction: int, max_coord: float, inplace: bool = False) -> "GCode":
         # One variable is mirrored along the other axis.
         new_commandstr = ""
         for line in self.commandstr.split("\n"):
@@ -456,9 +456,9 @@ class GCode:
                 for coord in old_coords.keys():
                     new_coord = old_coords[coord]
                     if direction == 0 and coord in ["X", "I", "P"]:
-                        new_coord = (-1) * old_coords[coord]
+                        new_coord = max_coord - old_coords[coord]
                     elif direction == 1 and coord in ["Y", "J", "Q"]:
-                        new_coord = (-1) * old_coords[coord]
+                        new_coord = max_coord - old_coords[coord]
                     new_line = replace_coordinate(new_line, coord, new_coord)
                 new_commandstr += new_line + "\n"
             else:
