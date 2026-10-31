@@ -17,6 +17,7 @@ setup(
         "torchaudio",
         "soundfile",
         "faster-whisper",
+        "av<19",
         #"pynput",
         "recasepunc @ git+https://github.com/Kalausel/recasepunc.git"
     ],
