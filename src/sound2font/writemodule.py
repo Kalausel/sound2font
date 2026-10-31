@@ -458,7 +458,7 @@ class GCode:
                     if direction == 0 and coord in ["X", "I", "P"]:
                         new_coord = (-1) * old_coords[coord]
                     elif direction == 1 and coord in ["Y", "J", "Q"]:
-                        new_coord = old_coords[correspondent] * np.sin(angle) + old_coords[coord] * np.cos(angle)
+                        new_coord = (-1) * old_coords[coord]
                     new_line = replace_coordinate(new_line, coord, new_coord)
                 new_commandstr += new_line + "\n"
             else:
