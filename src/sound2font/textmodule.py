@@ -12,3 +12,5 @@ class TextData_fw:
     
     def text(self):
         return self.fw_result
+
+TextData = TextData_fw
